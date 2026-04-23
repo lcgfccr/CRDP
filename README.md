@@ -110,6 +110,22 @@ bash install.sh   # idempotent — safe to re-run
 
 Caveman and GSD update from their official repos independently. Re-running `install.sh` pulls their latest versions.
 
+## Re-installing / Updating over an existing install
+
+`install.sh` is safe to re-run. What it skips vs. overwrites:
+
+| Item | Behaviour |
+|------|-----------|
+| Caveman (already installed) | Skipped — no changes |
+| GSD (already installed) | Skipped — no changes |
+| Vault skills (`~/.claude/skills/vault-*/`) | **Overwritten** with latest versions |
+| Vault hooks (`~/.claude/hooks/vault-*.js`) | **Overwritten** with latest versions |
+| `settings.json` hooks + env var | Skipped if already present — no duplicates added |
+| `~/.claude/CLAUDE.md` caveman snippet | Skipped if already present |
+| `~/.claude/vault/` data and pages | Never touched — your knowledge base is safe |
+
+**Note:** if you have locally customised any vault skill (`SKILL.md` files), re-running `install.sh` will overwrite those customisations. Back them up first if needed.
+
 ---
 
 ## Credits
