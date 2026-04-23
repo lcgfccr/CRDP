@@ -11,7 +11,7 @@ A one-stop preset for Claude Code that gives you a complete, efficient environme
 | Tool | Role | Source |
 |------|------|--------|
 | **Claude Knowledge Vault** | Per-project Obsidian knowledge base — persistent context, autonomous research, compound wiki loop | Proprietary (this repo) |
-| **GSD** | Project orchestration — roadmaps, phases, plans, execution | [syntax-syndicate/gsd](https://github.com/gsd-build/get-shit-done) |
+| **GSD** | Project orchestration — roadmaps, phases, plans, execution | [gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done) |
 | **Caveman** | Token efficiency — lite compression mode, auto-enabled every session | [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) |
 
 ---
@@ -115,5 +115,5 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 ## Credits
 
 - **[Caveman](https://github.com/JuliusBrussee/caveman)** — Julius Brussee — token compression for Claude Code
-- **[GSD](https://github.com/gsd-build/get-shit-done)** — Syntax Syndicate — structured development workflow
+- **[GSD](https://github.com/gsd-build/get-shit-done)** — gsd-build — structured development workflow
 - **Knowledge Vault concept** — inspired by [Andrej Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
