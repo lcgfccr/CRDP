@@ -65,7 +65,10 @@ Inspired by [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6b
 | `/vault-query "<question>"` | Q&A against vault content; gaps queued for future research |
 | `/vault-autoresearch <topic>` | 3-round autonomous web research loop → new wiki page. No-arg: pulls highest-leverage open question from queue (`--oldest` for FIFO). `--challenge` adds adversarial round 4 |
 | `/vault-challenge [[page]]` | Adversarial falsification — searches for counter-evidence to the page's main claims, classifies HELD UP / WEAKENED / UNFALSIFIED, appends `## Adversarial challenge` section |
-| `/vault-synthesize [[a]] [[b]] [...]` | Cross-domain juxtaposition — takes 2-5 pages, produces new synthesis page surfacing shared concepts, tensions, and non-obvious connections |
+| `/vault-synthesize [[a]] [[b]] [...]` | Cross-domain juxtaposition — takes 2-5 user-picked pages, produces new synthesis page surfacing shared concepts, tensions, and non-obvious connections |
+| `/vault-hypothesize [--tag X / --topic Y]` | Forced hypothesis generation — distills the vault and produces 3-5 testable bold assertions with reasoning, test paths, and stakes. Feeds questions.md as `HYPOTHESIS:` items |
+| `/vault-probe [--web / --harsh]` | Blind-spot detection — scans the vault against its thesis, surfaces UNKNOWN gaps (structural prerequisites, missing stakeholders, adjacent territory, competing frameworks). Top 3 added to questions.md |
+| `/vault-analogize [[page]]` | Forced cross-domain analogy — takes one page, discovers structurally similar patterns in other domains across the vault (synthesize = user picks; analogize = discovers). Maps what each teaches the other |
 | `/vault-integrate [[page]]` | Fold research findings back into source pages (diff + confirm) |
 | `/vault-lint [--deep]` | Health check — orphans, ghost links, stale open questions |
 | `/vault-update-hot-cache` | Distill vault to ≤2KB session context file |
@@ -131,6 +134,11 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 ---
 
 ## Changelog
+
+### v1.0.3 — Insight generation layer
+- **`/vault-hypothesize`** — new skill. Forced hypothesis generation. Reads the vault (whole or filtered by tag/topic), distills what it collectively asserts, produces 3-5 testable bold claims that follow from the content but aren't stated anywhere. Each has a falsification path, reasoning grounded in specific pages, a concrete test route, and stakes. Output feeds `questions.md` as `HYPOTHESIS:` items so `/vault-autoresearch` picks them up as falsifiable targets. The vault generates its own research agenda.
+- **`/vault-probe`** — new skill. Blind-spot detection. Scans the vault against its stated thesis, surfaces UNKNOWN gaps the user didn't articulate — structural prerequisites, adjacent territory, missing stakeholder perspectives, failure modes, scale axes, competing frameworks. Top 3 gaps added to `questions.md`. `--web` validates gaps against public domain discourse; `--harsh` amplifies adversarial scrutiny.
+- **`/vault-analogize [[page]]`** — new skill. Forced cross-domain analogy. Takes one page, searches the vault for pages with structurally similar patterns in different domains (vs `/vault-synthesize` where the user picks pages). Maps shared abstract mechanism, how each side instantiates it, and what each teaches the other — failure modes one side missed, defensive mechanisms the other lacks, mature → nascent transfer. Honest about rejected candidates and sparse pools.
 
 ### v1.0.2 — Critical research upgrades
 - **`/vault-challenge [[page]]`** — new skill. Adversarial falsification for any synthesis page. Searches for counter-evidence, classifies claims as HELD UP / WEAKENED / UNFALSIFIED, appends an `## Adversarial challenge` section. Auto-queues reconciliation items for weakened claims. Closes the Popper gap — the vault is no longer just a belief reinforcer.
