@@ -23,8 +23,9 @@ Active project subgraph at `~/.claude/vault/projects/<slug>/index.md`. If not, a
 ## Inputs
 
 - **Topic** (explicit): `/vault-autoresearch "OAuth2 PKCE flow in mobile apps"` — investigate this.
-- **Topic** (from queue): `/vault-autoresearch` with no args → read `projects/<slug>/questions.md`, pick the oldest unanswered entry (line starting `- [ ]`), and use its text as the topic.
+- **Topic** (from queue): `/vault-autoresearch` with no args → read `projects/<slug>/questions.md`, score open entries by leverage, pick highest. Use `--oldest` flag to restore FIFO (oldest `- [ ]` first).
 - **Depth**: default 3 rounds. `--deep` → 5 rounds, `--quick` → 1 round.
+- **Modifier**: `--challenge` → after synthesis page is written, run round 4 (adversarial falsification). Adds ~3-5 extra WebFetch calls.
 
 ## Execution model
 
@@ -33,8 +34,9 @@ Runs in an isolated subagent. Confirmation from the user happens BEFORE spawning
 **Before spawning (main context):**
 1. `node ~/.claude/hooks/vault-slug.js --resolve` → capture `<slug>`. Verify `index.md` exists.
 2. If topic passed as argument, use it directly.
-3. If no argument: read `~/.claude/vault/projects/<slug>/questions.md`, find the oldest `- [ ]` entry, show the user: "Queue has N open questions. Oldest: '<question>' — proceed? (yes / pick another / specify new topic)". Wait for confirmation here, before spawning.
+3. If no argument: read `~/.claude/vault/projects/<slug>/questions.md`. Default = priority-ranked pick (see "Resolving the topic" below for scoring). With `--oldest` flag, pick oldest `- [ ]` entry instead. Show user: "Queue has N open questions. Picked: '<question>' — leverage <score>, would unblock pages: [[a]], [[b]]. Proceed? (yes / pick another / specify new topic)". Wait for confirmation here, before spawning.
 4. Note depth: `--deep` (5 rounds), `--quick` (1 round), default 3.
+5. Note modifier: `--challenge` → adds adversarial round 4 after synthesis. Pass through to agent brief.
 
 **Spawn** (after topic is confirmed):
 ```
@@ -46,7 +48,10 @@ Agent(
     Execute vault-autoresearch for project '<slug>' at ~/.claude/vault/projects/<slug>/.
     Topic: "<confirmed topic>"
     Depth: <N> rounds
+    Challenge mode: <true | false>  # if true, run round 4 adversarial falsification after synthesis
     Source: <answered-from-queue | topic-explicit>
+    Queue pick mode (if from queue): <priority | oldest>
+    Leverage score (if priority): <N> — pages unblocked: [[...]]
     Queue entry timestamp (if from queue): <ts>
     Original queue line (verbatim, if from queue): <line>
 
@@ -66,10 +71,12 @@ Agent(
 
 1. If user passed a topic string, use it directly.
 2. Otherwise, read `questions.md`:
-   - Parse lines matching `^- \[ \] <timestamp> — <question> — from QUERY "<original>"`
-   - Pick the **oldest** open entry by timestamp. Ties broken arbitrarily.
+   - Parse lines matching `^- \[ \] <timestamp> — <question> — from QUERY "<original>"`.
    - If the file is missing or empty, tell the user and abort gracefully — suggest they run `/vault-query` first to populate it or pass a topic explicitly.
-3. Show the user the picked question + ask for one-line confirmation before spending WebFetch budget. (Skip confirmation only if user explicitly said "just go" / "don't ask".)
+3. Pick mode:
+   - **Default (priority-ranked)**: compute leverage score per open question. Leverage = count of existing pages in `pages/` whose own open questions (unanswered items under "What's still unclear", unresolved "Tensions & contradictions", or explicit TODOs) would be resolved if this research answered it. Use Claude semantic judgement on page contents — NOT keyword overlap. Pick highest leverage. Ties broken by oldest timestamp.
+   - **With `--oldest` flag**: restore FIFO. Pick oldest `- [ ]` entry by timestamp. Ties broken arbitrarily.
+4. Show the user the pick: question text, leverage score (or "FIFO" if `--oldest`), and the list of pages that would benefit (wikilinked). Ask one-line confirmation before spending WebFetch budget. (Skip confirmation only if user explicitly said "just go" / "don't ask".)
 
 ## Procedure
 
@@ -142,6 +149,35 @@ Agent(
    ```
    - <timestamp> — AUTORESEARCH — [[<topic-slug>]] — <N> sources — <1-line takeaway> — <answered-from-queue | topic-explicit>
    ```
+
+### Round 4 — adversarial challenge (only if `--challenge`)
+
+Run ONLY if caller passed `--challenge`. Executes AFTER round 3 synthesis page is written. Budget: ~3-5 extra WebFetch calls.
+
+1. Extract the 3-5 strongest claims from the synthesis (the ones the page most relies on).
+2. For each claim, `WebSearch` for counter-evidence: negation queries ("X does not", "X fails when", "why X is wrong"), critiques, failure case reports, known exceptions.
+3. `WebFetch` the most credible dissenting primary sources. Prefer sources that tested the claim empirically.
+4. Classify each claim into one bucket:
+   - **Held up** — counter-search found no credible rebuttal; claim survives.
+   - **Weakened** — credible counter-evidence exists; narrow scope, add caveat, or flag the conflict.
+   - **Unfalsified** — no one has actually tested it. Popular assertion lacking empirical challenge. Flag as "untested consensus".
+5. Append to the synthesis page (do NOT overwrite earlier sections):
+
+   ```markdown
+   ## Adversarial challenge
+
+   ### Claims that held up
+   - <claim> — searched for counter-evidence, none credible. ([counter-search](url))
+
+   ### Claims weakened
+   - <claim> — <how it was weakened> ([dissenting source](url))
+
+   ### Claims unfalsified (no one has tested)
+   - <claim> — widely repeated but no empirical challenge found.
+   ```
+
+6. Update page frontmatter: bump `rounds: 3` → `rounds: 4` and add `challenged: true`.
+7. Log entry gains ` — challenged` suffix: `... — <answered-from-queue | topic-explicit> — challenged`.
 
 ## Connecting dots (the value-add)
 

@@ -63,7 +63,9 @@ Inspired by [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6b
 | `/vault-save [title]` | Distill current conversation into a wiki page |
 | `/vault-ingest <path-or-url>` | Synthesize an external source (URL, file, or paste) into a page |
 | `/vault-query "<question>"` | Q&A against vault content; gaps queued for future research |
-| `/vault-autoresearch <topic>` | 3-round autonomous web research loop → new wiki page |
+| `/vault-autoresearch <topic>` | 3-round autonomous web research loop → new wiki page. No-arg: pulls highest-leverage open question from queue (`--oldest` for FIFO). `--challenge` adds adversarial round 4 |
+| `/vault-challenge [[page]]` | Adversarial falsification — searches for counter-evidence to the page's main claims, classifies HELD UP / WEAKENED / UNFALSIFIED, appends `## Adversarial challenge` section |
+| `/vault-synthesize [[a]] [[b]] [...]` | Cross-domain juxtaposition — takes 2-5 pages, produces new synthesis page surfacing shared concepts, tensions, and non-obvious connections |
 | `/vault-integrate [[page]]` | Fold research findings back into source pages (diff + confirm) |
 | `/vault-lint [--deep]` | Health check — orphans, ghost links, stale open questions |
 | `/vault-update-hot-cache` | Distill vault to ≤2KB session context file |
@@ -125,6 +127,24 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 | `~/.claude/vault/` data and pages | Never touched — your knowledge base is safe |
 
 **Note:** if you have locally customised any vault skill (`SKILL.md` files), re-running `install.sh` will overwrite those customisations. Back them up first if needed.
+
+---
+
+## Changelog
+
+### v1.0.2 — Critical research upgrades
+- **`/vault-challenge [[page]]`** — new skill. Adversarial falsification for any synthesis page. Searches for counter-evidence, classifies claims as HELD UP / WEAKENED / UNFALSIFIED, appends an `## Adversarial challenge` section. Auto-queues reconciliation items for weakened claims. Closes the Popper gap — the vault is no longer just a belief reinforcer.
+- **`/vault-synthesize [[a]] [[b]] [...]`** — new skill. Cross-domain juxtaposition. Takes 2-5 pages (usually from different domains), produces a new synthesis page with shared concepts, tensions, non-obvious connections, and what they unlock. Innovation through forced recombination — the step most AI research tools skip.
+- **Priority-ranked queue** — `/vault-autoresearch` (no-arg) now picks by leverage score (how many existing pages would be unblocked) instead of oldest-first. Use `--oldest` to restore FIFO. Directs research effort where it compounds most.
+- **`/vault-autoresearch --challenge`** — optional flag. Runs adversarial round 4 immediately after synthesis. Makes research output falsifiable by default when you opt in.
+
+### v1.0.0 — Initial release
+- Per-project knowledge vault with Obsidian graph view integration
+- Commands: `/vault-init`, `/vault-save`, `/vault-ingest`, `/vault-query`, `/vault-autoresearch`, `/vault-integrate`, `/vault-lint`, `/vault-update-hot-cache`, `/vault-help`
+- Caveman installed at lite level, auto-enabled every session
+- GSD installed from official repo
+- Hooks: SessionStart (context injection), PostToolUse (source logging), Stop (session summary)
+- Compound loop: `/vault-query` → `/vault-autoresearch` → `/vault-integrate`
 
 ---
 
