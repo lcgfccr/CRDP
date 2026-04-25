@@ -64,6 +64,7 @@ Agent(
    created: <ISO-8601 date>
    source: conversation
    tags: [<extracted topic tags>]
+   verification: none
    ---
 
    # <title>
@@ -112,3 +113,4 @@ Agent(
 - Keep technical content verbatim (code, error strings, URLs).
 - If the conversation is short or trivial, warn the user before saving — not every chat deserves a wiki page.
 - Default to minimum viable — a 3-paragraph page beats a 10-paragraph page of filler.
+- Conversation-saved pages are DRAFTS. They ship with `verification: none` and stay drafts until they pass `/vault-challenge` (which sets `verification: full` + `challenged: <date>`) or are explicitly `--force`-integrated via `/vault-integrate`. `/vault-integrate` refuses unverified pages by default.

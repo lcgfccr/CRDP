@@ -96,8 +96,11 @@ Agent(
 
 ### Round 3 — synthesize
 
+Adds ~1-2 WebFetch calls for a mandatory counter-evidence pass before writing. NOT optional. The `--challenge` flag still triggers the deeper Round 4.
+
 1. Ask: **what is the user likely trying to understand or decide?**
-2. Write the synthesis at `projects/<slug>/pages/<topic-slug>.md`:
+2. **Counter-evidence pass (mandatory)** — before assembling `## Tensions & contradictions`, identify the 2-3 strongest claims the synthesis will rest on. Run 1-2 targeted `WebSearch` calls for dissent: `"<claim> limitations"`, `"<claim> failure cases"`, `"against <claim>"`, `"<claim> does not"`. `WebFetch` the most credible dissent. Use these results to populate the Tensions section ACTIVELY — do not rely only on what surfaced organically in rounds 1-2.
+3. Write the synthesis at `projects/<slug>/pages/<topic-slug>.md`:
 
    ```markdown
    ---
@@ -106,6 +109,7 @@ Agent(
    source: autoresearch
    tags: [...]
    rounds: 3
+   verification: quick
    answers: <question text from questions.md, if pulled from queue; else omit>
    ---
 

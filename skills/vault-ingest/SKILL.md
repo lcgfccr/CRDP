@@ -64,6 +64,8 @@ Agent(
 
 3. **Extract structured metadata**. Title, author(s), publication date, source type (paper/article/blog/thread/code), primary URL or local path, tags (extracted topic terms), estimated reading time or length class (short/medium/long).
 
+3b. **Contestation check (mandatory)**. Run 1 `WebSearch` to test whether the source's central claims are contested in the field: `"<central claim> contested"`, `"<central claim> debunked"`, `"critique of <author/claim>"`, `"<claim> failure cases"`. If credible counter-evidence surfaces, capture the dissenting source URL — it will annotate the relevant Key claim inline as `(contested by [source](url))`.
+
 4. **Synthesize a wiki page** at `projects/<slug>/pages/<source-slug>.md`:
 
    ```markdown
@@ -75,6 +77,7 @@ Agent(
    author(s): <if known>
    published: <date if known>
    tags: [...]
+   verification: quick
    ---
 
    # <title>
@@ -85,7 +88,7 @@ Agent(
 
    ## Key claims
 
-   - <claim 1 with page/section reference if available>
+   - <claim 1 with page/section reference if available> <if contested per step 3b: `(contested by [source](url))`>
    - <claim 2>
    - ...
 

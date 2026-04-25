@@ -29,7 +29,8 @@ Runs in an isolated subagent. Unlike other vault skills, confirmation happens MI
 **Before spawning (main context):**
 1. `node ~/.claude/hooks/vault-slug.js --resolve` → capture `<slug>`.
 2. Parse argument: extract `<research-slug>` from `[[slug]]` wikilink or bare slug.
-3. Verify `pages/<research-slug>.md` exists. If not, abort with clear error.
+3. Parse `--force "<reason>"` flag if present. Capture `<force-reason>` for downstream logging.
+4. Verify `pages/<research-slug>.md` exists. If not, abort with clear error.
 
 **Spawn:**
 ```
@@ -40,6 +41,8 @@ Agent(
 
     Execute vault-integrate for project '<slug>' at ~/.claude/vault/projects/<slug>/.
     Research page: pages/<research-slug>.md
+    Force: <true | false>
+    Force reason (if force=true): "<one-line reason>"
 
     Follow the full procedure in the vault-integrate skill. CRITICAL: show proposed
     changes as a diff before writing any file. Get explicit confirmation before each write.
@@ -50,6 +53,26 @@ Agent(
 **After:** Echo the agent's final integration summary verbatim.
 
 ## Procedure
+
+### 0. Verification gate (BEFORE diff)
+
+Read the research page's frontmatter FIRST — before computing any diff. Inspect the `verification:` field and `challenged:` field:
+
+- `verification: quick`, `verification: full`, OR `challenged:` field present (any date) → proceed normally to step 1.
+- `verification: none` OR field missing AND no `challenged:` field → REFUSE unless `--force` was passed. Print:
+
+  ```
+  Page [[<research-slug>]] has not been verified (verification: <none | missing>).
+  Run /vault-challenge [[<research-slug>]] first, or pass --force "<one-line reason>" to integrate anyway.
+  Bypass: /vault-integrate [[<research-slug>]] --force "<reason>"
+  ```
+
+  Then abort. Do NOT proceed to diffing or writing.
+
+- If `--force "<reason>"` was passed: proceed, but log the bypass to `log.md` BEFORE step 7's normal entry:
+  ```
+  - <timestamp> — INTEGRATE-FORCE — [[<research-slug>]] — <reason>
+  ```
 
 ### 1. Read the research page
 
@@ -151,3 +174,4 @@ Research page marked integrated: [<slugs>].
 - Cap at 5 source pages per run. More can be done in a follow-up invocation.
 - If a source page has no open questions the research answers, skip it — do not add gratuitous links.
 - The `> **Updated:**` blockquote format is canonical — keep it consistent so future tools can parse it.
+- VERIFICATION GATE is non-negotiable. Pages with `verification: none` or missing field and no `challenged:` field are REFUSED unless `--force "<reason>"` is passed. The forced bypass logs `INTEGRATE-FORCE — [[page]] — <reason>` to `log.md` so the audit trail captures every shortcut.

@@ -84,6 +84,10 @@ Work through these four passes in order — each builds on the last:
 
 If a non-obvious connection feels speculative, run 1-2 targeted WebSearches to check. Do NOT fabricate corroboration. If the connection is speculative and stays speculative, mark it as such in the synthesis page (`> Speculative: ...`).
 
+### 3b. Counter-evidence pass (mandatory)
+
+Before writing the synthesis page, run 1 `WebSearch` for counter-evidence to the cross-page combination: `"<combination> fails when"`, `"<synthesis claim> limitations"`, `"against <combination>"`. Feed findings ACTIVELY into the `## Tensions` section — name the failure mode, cite the dissent. Do not skip even if the juxtaposition feels solid.
+
 ### 4. Resolve synthesis slug and title
 
 - If `--title "<custom>"` was passed, use that title. Slugify for filename.
@@ -102,6 +106,7 @@ created: <ISO-8601 date>
 source: vault-synthesize
 tags: [synthesis, cross-domain, ...extracted from input page tags]
 inputs: [<input-slug-a>, <input-slug-b>, ...]
+verification: quick
 ---
 
 # <synthesis title>

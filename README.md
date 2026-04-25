@@ -138,6 +138,19 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 
 ## Changelog
 
+### v1.0.5 — Critical thinking by default
+Critical thinking is now structural, not optional. The vault refuses to compound un-verified content silently.
+
+- **`verification:` frontmatter state machine** — every page now carries `verification: none | quick | full`. Lifecycle: drafts ship as `none`, page-creation skills set `quick`, `/vault-challenge` promotes to `full`.
+- **`/vault-autoresearch`** — Round 3 now includes a mandatory counter-evidence pass (1-2 WebSearches for dissent on the synthesis's strongest claims) before writing. Populates `## Tensions & contradictions` actively. Sets `verification: quick`. Adds ~10% time per run. `--challenge` flag still triggers full Round 4.
+- **`/vault-synthesize`** — pre-write adversarial sweep (1 WebSearch for "synthesis fails when..."). Sets `verification: quick`.
+- **`/vault-ingest`** — contestation check (1 WebSearch for "<claim> contested / debunked / critique of"). Sources with credible counter-evidence get inline `(contested by [source])` annotations. Sets `verification: quick`.
+- **`/vault-save`** — sets `verification: none` automatically. Conversation-saved pages are explicit drafts until promoted via `/vault-challenge` or `--force`-integrated.
+- **`/vault-integrate` verification gate** — refuses to fold pages without `verification:` field (or with `verification: none`). Bypass: `--force "<one-line reason>"`, which logs `INTEGRATE-FORCE — [[page]] — <reason>` to `log.md` for audit. Gate is deterministic (decided in main context from frontmatter alone, no agent spawn) — cheap and fast.
+- **`/vault-challenge` unchanged** — still the deep-dive / re-test / surgical falsification tool. Now sets `verification: full` + `challenged: <date>`.
+
+Net effect: the path of least resistance now produces challenged content. Skip path requires conscious `--force` with reason. The skip is visible and audited.
+
 ### v1.0.4 — Output, breadth research, quality scoring
 - **`/vault-output <format>`** — new skill. Produce consumer-grade artifacts from existing vault pages: report, study-guide, comparison, timeline, glossary. Pure synthesis — no web fetches. Outputs land in `outputs/`, never `pages/` — ship-and-forget vs compounding knowledge. Per-finding citation rule baked into every template to mitigate hallucination.
 - **`/vault-landscape "topic" [-N 3-7]`** — new skill. Breadth-first parallel research for entering a new domain. Main context fans out N personas (default 5: landscape / mechanics / failure-modes / stakeholders / adversarial) as parallel agents in one message, then merges via the synthesize 4-pass pattern. Distinct from `/vault-autoresearch` (depth-first) — landscape is the mapmaker, autoresearch is the explorer. Bypasses priority queue. Mandatory cost confirmation before spawning (~3-5x WebFetch budget vs sequential).
