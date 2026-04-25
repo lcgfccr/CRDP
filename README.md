@@ -138,6 +138,17 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 
 ## Changelog
 
+### v1.0.6 — Force-bypass discipline (architectural primary + targeted in-flow + audit catch)
+The verification gate from v1.0.5 had a single escape hatch (`--force "<reason>"`). Over time, that escape becomes muscle memory. v1.0.6 restructures the gate to eliminate the failure mode on the highest-risk paths.
+
+- **`/vault-integrate` page-type routing (Section 0)** — the gate now routes on the source page's `source:` frontmatter:
+  - `source: autoresearch` OR `source: vault-synthesize` → high-risk inferential. **`--force` is unconditionally rejected.** Must run `/vault-challenge` first. Eliminates the dangerous-path bypass entirely.
+  - `source: conversation` (vault-save), `source: ingest`, or no `source:` field (legacy) → existing `--force "<reason>"` behavior preserved.
+- **Section 0b — diff-show before force** — when `--force` IS accepted (on conversation/ingest/legacy paths), the agent surfaces any `## Adversarial challenge` content + inline `(contested by ...)` annotations and requires explicit `y` to continue. Silent-passes when there's nothing to surface. Breaks muscle memory by transparency, not punishment.
+- **`vault-session-end.js` FORCE-NUDGE** — Stop hook scans the session window for `INTEGRATE-FORCE` entries without subsequent `CHALLENGE`. For each force-bypassed page that wasn't challenged this session, prepends `FORCE-NUDGE — force-bypassed [[page]] not challenged this session — consider /vault-challenge [[page]]` before the `SESSION-END` line. Cap: 3 nudges per session. Catches slip at moment of formation.
+
+Net effect: adversarial bypass on inferential pages (autoresearch / synthesize) is impossible. Bypass on legitimate-feeling paths (conversation / ingest) shows what's being ignored at the moment of bypass and gets nudged at session end if not challenged.
+
 ### v1.0.5 — Critical thinking by default
 Critical thinking is now structural, not optional. The vault refuses to compound un-verified content silently.
 

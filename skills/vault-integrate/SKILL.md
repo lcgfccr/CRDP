@@ -29,7 +29,7 @@ Runs in an isolated subagent. Unlike other vault skills, confirmation happens MI
 **Before spawning (main context):**
 1. `node ~/.claude/hooks/vault-slug.js --resolve` → capture `<slug>`.
 2. Parse argument: extract `<research-slug>` from `[[slug]]` wikilink or bare slug.
-3. Parse `--force "<reason>"` flag if present. Capture `<force-reason>` for downstream logging.
+3. Parse `--force "<reason>"` flag if present. Capture `<force-reason>` for downstream logging. Note: agent will reject `--force` on `source: autoresearch` / `source: vault-synthesize` page types regardless of reason — these need /vault-challenge first (see Section 0 page-type routing).
 4. Verify `pages/<research-slug>.md` exists. If not, abort with clear error.
 
 **Spawn:**
@@ -56,23 +56,48 @@ Agent(
 
 ### 0. Verification gate (BEFORE diff)
 
-Read the research page's frontmatter FIRST — before computing any diff. Inspect the `verification:` field and `challenged:` field:
+Read the research page's frontmatter FIRST — before computing any diff. Route on the `source:` field, then inspect `challenged:` and `verification:` fields:
 
-- `verification: quick`, `verification: full`, OR `challenged:` field present (any date) → proceed normally to step 1.
-- `verification: none` OR field missing AND no `challenged:` field → REFUSE unless `--force` was passed. Print:
+**Page-type routing:**
+
+- `source: autoresearch` OR `source: vault-synthesize` → high-risk inferential. REFUSE unless `challenged:` frontmatter exists (any date). **`--force` is NOT accepted on these page types.** If no `challenged:` field, print:
 
   ```
-  Page [[<research-slug>]] has not been verified (verification: <none | missing>).
-  Run /vault-challenge [[<research-slug>]] first, or pass --force "<one-line reason>" to integrate anyway.
-  Bypass: /vault-integrate [[<research-slug>]] --force "<reason>"
+  Page [[<research-slug>]] is type <autoresearch | vault-synthesize> and has not been challenged. These page types CANNOT be force-integrated — too high-risk inferential. Run /vault-challenge [[<research-slug>]] first.
   ```
 
-  Then abort. Do NOT proceed to diffing or writing.
+  Then abort. Do NOT proceed to diffing or writing. Do NOT honor `--force` for these page types — print the message above even if `--force` was passed.
 
-- If `--force "<reason>"` was passed: proceed, but log the bypass to `log.md` BEFORE step 7's normal entry:
-  ```
-  - <timestamp> — INTEGRATE-FORCE — [[<research-slug>]] — <reason>
-  ```
+- `source: conversation` (vault-save), `source: ingest` (or `source_type: paper | article | blog | thread | code | paste`, indicating ingest origin), OR no `source:` field (legacy) → low/medium-risk. Apply existing gate:
+  - `verification: quick`, `verification: full`, OR `challenged:` field present (any date) → proceed normally to step 1.
+  - `verification: none` OR missing AND no `challenged:` field → REFUSE unless `--force "<reason>"` was passed. Print:
+
+    ```
+    Page [[<research-slug>]] has not been verified (verification: <none | missing>).
+    Run /vault-challenge [[<research-slug>]] first, or pass --force "<one-line reason>" to integrate anyway.
+    Bypass: /vault-integrate [[<research-slug>]] --force "<reason>"
+    ```
+
+    Then abort. Do NOT proceed to diffing or writing.
+
+  - If `--force "<reason>"` was passed: proceed to Section 0b (contested-claims confirmation), then log the bypass to `log.md` BEFORE step 7's normal entry:
+    ```
+    - <timestamp> — INTEGRATE-FORCE — [[<research-slug>]] — <reason>
+    ```
+
+### 0b. Contested-claims confirmation (only when --force used)
+
+Only runs when `--force "<reason>"` was accepted in Section 0 (i.e., conversation / ingest / legacy pages). Skip entirely on the normal verified path.
+
+1. Read the research page's `## Adversarial challenge` section if present, plus any inline `(contested by ...)` annotations anywhere in the page body.
+2. If any contested claims found, display a short summary (claim → contesting evidence/source, one line each) and ask:
+
+   ```
+   These contested claims will be integrated as-is. Continue? (y/n)
+   ```
+
+   Wait for explicit `y`. Anything else → abort, do NOT log INTEGRATE-FORCE, do NOT touch any file.
+3. If none found, no extra prompt — proceed to step 1.
 
 ### 1. Read the research page
 
@@ -174,4 +199,7 @@ Research page marked integrated: [<slugs>].
 - Cap at 5 source pages per run. More can be done in a follow-up invocation.
 - If a source page has no open questions the research answers, skip it — do not add gratuitous links.
 - The `> **Updated:**` blockquote format is canonical — keep it consistent so future tools can parse it.
-- VERIFICATION GATE is non-negotiable. Pages with `verification: none` or missing field and no `challenged:` field are REFUSED unless `--force "<reason>"` is passed. The forced bypass logs `INTEGRATE-FORCE — [[page]] — <reason>` to `log.md` so the audit trail captures every shortcut.
+- VERIFICATION GATE is non-negotiable and routes on `source:` frontmatter.
+  - `source: autoresearch` / `source: vault-synthesize` → REFUSED unless `challenged:` field exists. **`--force` is rejected on these page types** — too high-risk inferential. Must run /vault-challenge first.
+  - `source: conversation` / `source: ingest` (or `source_type: paper | article | blog | thread | code | paste`) / no `source:` field (legacy) → REFUSED if `verification: none` or missing AND no `challenged:` field, unless `--force "<reason>"` is passed. The forced bypass logs `INTEGRATE-FORCE — [[page]] — <reason>` to `log.md`.
+- When `--force` is accepted, Section 0b summarizes any `## Adversarial challenge` content / `(contested by ...)` annotations and demands explicit `y` before proceeding. `n` (or anything not `y`) → abort, do NOT log INTEGRATE-FORCE, do NOT touch any file.
