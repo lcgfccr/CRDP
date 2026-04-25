@@ -169,7 +169,14 @@ Append a `## Related` section line to EACH of: the source page, and every analog
 - [[analogies-<source-slug>-<date>]] — structural analog via <one-line pattern name>
 ```
 
-### 9. Append new research gaps to questions.md
+### 9. Update index.md
+
+Add the new analogies page under a `## Analogies` section in `index.md` (create the section if missing):
+```
+- [[analogies-<source-slug>-<date>]] — structural analogs for [[<source-slug>]]: <one-line summary — top match + count>
+```
+
+### 10. Append new research gaps to questions.md
 
 For each lesson that suggests a research gap (e.g., "source is missing defensive mechanism X that analog uses"), append a new `- [ ]` line to `questions.md`:
 
@@ -179,13 +186,13 @@ For each lesson that suggests a research gap (e.g., "source is missing defensive
 
 Dedupe against existing entries (case-insensitive substring). Cap: 5 new entries per run.
 
-### 10. Append to log.md
+### 11. Append to log.md
 
 ```
 - <timestamp> — ANALOGIZE — [[<source-slug>]] → N analogs — top: [[<analog-1>]]
 ```
 
-### 11. Return compact summary
+### 12. Return compact summary
 
 ```
 Analogs for [[<source-slug>]] in [[analogies-<source-slug>-<date>]]. Top: [[<analog-1>]] — shared pattern: <one phrase>. N analogs mapped. M rejected as non-structural.

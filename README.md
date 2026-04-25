@@ -69,6 +69,9 @@ Inspired by [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6b
 | `/vault-hypothesize [--tag X / --topic Y]` | Forced hypothesis generation — distills the vault and produces 3-5 testable bold assertions with reasoning, test paths, and stakes. Feeds questions.md as `HYPOTHESIS:` items |
 | `/vault-probe [--web / --harsh]` | Blind-spot detection — scans the vault against its thesis, surfaces UNKNOWN gaps (structural prerequisites, missing stakeholders, adjacent territory, competing frameworks). Top 3 added to questions.md |
 | `/vault-analogize [[page]]` | Forced cross-domain analogy — takes one page, discovers structurally similar patterns in other domains across the vault (synthesize = user picks; analogize = discovers). Maps what each teaches the other |
+| `/vault-landscape "topic" [-N 3-7]` | Breadth-first parallel research for entering a new domain. Fans out N personas (default 5: landscape / mechanics / failure-modes / stakeholders / adversarial), each running independent web research, then merges into a landscape page. Complement to autoresearch (depth) — landscape is the mapmaker |
+| `/vault-output <format>` | Produce consumer-grade artifacts from existing vault pages (pure synthesis, no web). Five formats: report, study-guide, comparison, timeline, glossary. Outputs land in `outputs/`, never `pages/` — ship-and-forget vs compounding knowledge |
+| `/vault-lint --quality / --all` | Adds per-page quality scoring on 6 dimensions (cite-density, cite-diversity, never-challenged, freshness, inbound-links, open-q resolution) → GREEN / YELLOW / RED traffic light + per-page next-move suggestion |
 | `/vault-integrate [[page]]` | Fold research findings back into source pages (diff + confirm) |
 | `/vault-lint [--deep]` | Health check — orphans, ghost links, stale open questions |
 | `/vault-update-hot-cache` | Distill vault to ≤2KB session context file |
@@ -134,6 +137,12 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 ---
 
 ## Changelog
+
+### v1.0.4 — Output, breadth research, quality scoring
+- **`/vault-output <format>`** — new skill. Produce consumer-grade artifacts from existing vault pages: report, study-guide, comparison, timeline, glossary. Pure synthesis — no web fetches. Outputs land in `outputs/`, never `pages/` — ship-and-forget vs compounding knowledge. Per-finding citation rule baked into every template to mitigate hallucination.
+- **`/vault-landscape "topic" [-N 3-7]`** — new skill. Breadth-first parallel research for entering a new domain. Main context fans out N personas (default 5: landscape / mechanics / failure-modes / stakeholders / adversarial) as parallel agents in one message, then merges via the synthesize 4-pass pattern. Distinct from `/vault-autoresearch` (depth-first) — landscape is the mapmaker, autoresearch is the explorer. Bypasses priority queue. Mandatory cost confirmation before spawning (~3-5x WebFetch budget vs sequential).
+- **`/vault-lint --quality`** — extended existing skill. Per-page quality scoring on 6 dimensions: cite-density, cite-diversity, never-challenged, freshness (volatility-scaled), inbound-links, open-question resolution rate. Composite score → GREEN / YELLOW / RED traffic light. Per-flagged-page next-move suggestion (e.g., D3 weak → run `/vault-challenge`). `quality_profile:` frontmatter convention for meta-pages (synthesis/probe/hypotheses/analogies). 14-day grace period for fresh pages.
+- **Bug fixes**: `vault-analogize` now updates `index.md` under `## Analogies` section (was missed, caused orphans). `vault-output` and `vault-landscape` agents `mkdir -p` defensively before writing (avoids harness hook blocks on non-existent directories).
 
 ### v1.0.3 — Insight generation layer
 - **`/vault-hypothesize`** — new skill. Forced hypothesis generation. Reads the vault (whole or filtered by tag/topic), distills what it collectively asserts, produces 3-5 testable bold claims that follow from the content but aren't stated anywhere. Each has a falsification path, reasoning grounded in specific pages, a concrete test route, and stakes. Output feeds `questions.md` as `HYPOTHESIS:` items so `/vault-autoresearch` picks them up as falsifiable targets. The vault generates its own research agenda.
