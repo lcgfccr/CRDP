@@ -52,6 +52,12 @@ Flat architecture: main context does the orchestration directly. No orchestrator
    ```
    Wait for explicit confirmation. The 3-5x cost delta vs `/vault-autoresearch` justifies the gate.
 
+7. **Resolve landscape policy.** Before fan-out:
+   - Check `raw/policy-<topic-slug>.md` for this landscape topic.
+   - Missing → recommend running `/vault-policy "<topic>"` first, OR proceed with explicit user confirmation tagging output `policy_status: missing`.
+   - Present → read frontmatter fields. Pass relevant constraints (`authoritative_domains` allowlist, `blocklist_extra` blocklist, `dissent_classes_required`) into each persona's WebSearch parameters via the persona brief.
+   - Tag landscape output frontmatter `quality_policy: <topic-slug>`.
+
 **Fan-out (after confirmation, main context):**
 
 Main context issues N parallel `Agent()` calls in a SINGLE message — one tool block, N entries. This is the only place parallel fan-out reliably triggers in Claude Code; nested calls from inside a subagent serialize. See persona brief in section 1 below.

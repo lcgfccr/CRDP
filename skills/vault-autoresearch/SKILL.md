@@ -82,6 +82,17 @@ Agent(
 
 ### Round 1 — orient
 
+0.5. **Read policy** (if present). Look for `~/.claude/vault/projects/<slug>/raw/policy-<topic-slug>.md`. Cache for all rounds.
+   - **Missing exact slug** → scan all `raw/policy-*.md` files for topical overlap with current topic. Score each by: (a) topic-stem token overlap, (b) `topic_class` match against the current topic's likely class, (c) tag overlap if topic has implicit tags. If any candidate scores above threshold (e.g., ≥3 stem tokens shared OR `topic_class` match + ≥2 stem tokens), use it as **advisory** — read fields, apply softer (medium-confidence behavior regardless of policy's stated confidence). Tag page frontmatter `policy_status: advisory-from-<source-policy-slug>`. Surface in main-context confirmation: "No exact policy. Using [[<broader-policy>]] as advisory guidance — proceed?". Wait for user confirmation before spawning.
+   - **No exact AND no overlap** → default-fallback policy (least-restrictive: blocklist-only, no class enforcement). Tag synthesis page frontmatter `policy_status: missing`. Never block research.
+   - **Present** → parse frontmatter. Set WebSearch params by `confidence_in_assessment`:
+     - `high` → pass `allowed_domains: <authoritative_domains>` to all WebSearch calls.
+     - `medium` → pass `allowed_domains` on round 1 query 1 only; drop on backup queries (rerank-style).
+     - `low` → no allowlist, only `blocked_domains: <blocklist_extra + global>`.
+   - Append topic-class authority phrase to query: `technical-spec` → `"RFC" OR "specification"`; `academic` → `"peer-reviewed"`; `vendor-comparison` → `review OR benchmark`; `current-events` → `2026`; `foundational` → `"textbook" OR "introduction"`; `hyped-domain` → no append (allowlist does work).
+   - **Escalation**: allowlist returns <3 results → drop most-restrictive query terms (1 retry) → try `dissent_likely_locations` as allowlist → fall back to blocklist-only with warning. Cap 2 retries. Log to frontmatter `policy_compliance.escalation: ["allowlist-thin"]`.
+   - Tag synthesis page frontmatter `quality_policy: <topic-slug>`.
+
 1. `WebSearch` the topic. Pull ~5-10 distinct URLs.
 2. For each top result, `WebFetch` and extract key claims + source.
 3. Write round-1 notes to `projects/<slug>/raw/autoresearch-<topic-slug>-r1.md`: key claims, disagreements, URLs.
@@ -99,7 +110,19 @@ Agent(
 Adds ~1-2 WebFetch calls for a mandatory counter-evidence pass before writing. NOT optional. The `--challenge` flag still triggers the deeper Round 4.
 
 1. Ask: **what is the user likely trying to understand or decide?**
-2. **Counter-evidence pass (mandatory)** — before assembling `## Tensions & contradictions`, identify the 2-3 strongest claims the synthesis will rest on. Run 1-2 targeted `WebSearch` calls for dissent: `"<claim> limitations"`, `"<claim> failure cases"`, `"against <claim>"`, `"<claim> does not"`. `WebFetch` the most credible dissent. Use these results to populate the Tensions section ACTIVELY — do not rely only on what surfaced organically in rounds 1-2.
+2. **Counter-evidence pass (mandatory, policy-aware)** — before assembling `## Tensions & contradictions`, identify the 2-3 strongest claims the synthesis will rest on.
+   - **If policy present**: read `dissent_classes_required`. Run ONE class-targeted `WebSearch` per required class:
+     - `academic` → allowlist `arxiv.org, scholar.google.com, aclanthology.org`.
+     - `regulatory` → allowlist `*.gov, eur-lex.europa.eu` + regulator domains.
+     - `practitioner` → blocklist mode + `"<claim>" postmortem OR "in production" OR incident`.
+     - `adversarial` → blocklist mode + `"<claim>" criticism OR "X is wrong" OR limitations`.
+     - `industry-analyst` → allowlist `gartner.com, forrester.com`.
+   - Class returns 0 results → append class to `dissent_classes_missing` in synthesis page frontmatter. Surface in `## Tensions & contradictions` as a quality signal ("counter-evidence thin in <class>"). Do NOT fail hard.
+   - All required classes return 0 → annotate Tensions: "counter-evidence thin across all required classes; lower confidence."
+   - **If `risk_flags` contains `hype-cycle`**: ALSO run an adversarial query irrespective of `dissent_classes_required`.
+   - **Policy missing**: fall back to 1-2 generic searches: `"<claim> limitations"`, `"<claim> failure cases"`, `"against <claim>"`, `"<claim> does not"`.
+   - `WebFetch` the most credible dissent per class. Use these results to populate the Tensions section ACTIVELY — do not rely only on what surfaced organically in rounds 1-2.
+   - Frontmatter additions: `dissent_classes_required`, `dissent_classes_found`, `dissent_classes_missing`.
 3. Write the synthesis at `projects/<slug>/pages/<topic-slug>.md`:
 
    ```markdown

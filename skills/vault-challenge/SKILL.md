@@ -76,6 +76,22 @@ For each of the (up to 5) claims, run targeted counter-evidence searches. Use va
 
 Also WebSearch for review papers, postmortems, and benchmark failures that might contradict the claim.
 
+### 2.5 Read policy (if present)
+
+Resolve target page's `quality_policy:` frontmatter pointer. If present, read `~/.claude/vault/projects/<slug>/raw/policy-<topic-slug>.md`. Absent → skip this step, default behavior applies.
+
+Calibrate WEAKENED bar to `evidence_standard`:
+- `peer-reviewed` → claim must have ≥1 peer-reviewed citation to remain HELD UP. Practitioner blogs alone insufficient.
+- `RFC-or-spec` → claim must reference the spec section to remain HELD UP.
+- `practitioner-consensus` → claim must have 2+ independent practitioner sources to remain HELD UP.
+- `regulatory-ruling` / `empirical-data` / `mixed` → existing rules.
+
+`risk_flags` weighting:
+- `[hype-cycle]` → lower the WEAKENED bar; vendor-marketing claims must clear higher hurdle.
+- `[vendor-marketing-heavy]` → automatically WEAKEN any claim citing vendor blogs as primary support.
+
+`dissent_likely_locations` → use as starting points / allowlist for adversarial searches in step 3, replacing generic `"<claim>" limitations`-style queries.
+
 ### 3. Fetch top counter-sources
 
 For each claim, `WebFetch` the top 2-3 results that look like genuine counter-evidence (not mere restatements of the original claim). Extract:

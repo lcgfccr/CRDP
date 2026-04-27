@@ -64,6 +64,19 @@ Agent(
 
 3. **Extract structured metadata**. Title, author(s), publication date, source type (paper/article/blog/thread/code), primary URL or local path, tags (extracted topic terms), estimated reading time or length class (short/medium/long).
 
+3a.5. **Resolve quality policy + auto-classify source**.
+   - Read project's policies: scan `raw/policy-*.md` for any matching topic tags from this ingest's frontmatter.
+   - If matching policy found, set `quality_policy: <topic-slug>` in ingested page frontmatter. Else `quality_policy: none`.
+   - Auto-classify the source URL/file by domain into `source_class:` field — heuristic:
+     * `.gov` / `.mil` → `regulatory`
+     * `arxiv.org` / `*.edu` / `ssrn.com` → `academic`
+     * `ietf.org` / `nist.gov` / `*.iso.org` → `standards-body`
+     * `medium.com` / `substack.com` / personal blogs → `practitioner`
+     * `nytimes.com` / `wsj.com` / `theverge.com` → `journalism`
+     * vendor domains → `vendor`
+     * `reddit.com` / `news.ycombinator.com` / forums → `forum`
+   - If source URL matches policy's `blocklist_extra`, halt ingest with warning to user.
+
 3b. **Contestation check (mandatory)**. Run 1 `WebSearch` to test whether the source's central claims are contested in the field: `"<central claim> contested"`, `"<central claim> debunked"`, `"critique of <author/claim>"`, `"<claim> failure cases"`. If credible counter-evidence surfaces, capture the dissenting source URL — it will annotate the relevant Key claim inline as `(contested by [source](url))`.
 
 4. **Synthesize a wiki page** at `projects/<slug>/pages/<source-slug>.md`:

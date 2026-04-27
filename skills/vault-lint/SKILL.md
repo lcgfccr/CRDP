@@ -3,14 +3,15 @@ name: vault-lint
 description: >
   Health check for the current project's vault subgraph. Detects orphan pages,
   dead wikilinks, missing index entries, duplicate titles, stale claims,
-  contradictions, and (with --quality / --all) scores per-page health on six
+  contradictions, and (with --quality / --all) scores per-page health on seven
   dimensions (cite-density, cite-diversity, never-challenged, freshness,
-  inbound-links, open-question resolution) into GREEN/YELLOW/RED traffic lights
-  with per-flagged-page next-move suggestions. Reports findings and proposes
-  fixes — does NOT auto-fix. Use when user says: /vault-lint, /vault-lint --deep,
-  /vault-lint --quality, /vault-lint --all, /vault-lint --page <slug>,
-  "check the vault", "audit the knowledge base", "lint the wiki", "find gaps",
-  "score vault quality".
+  inbound-links, open-question resolution, D8 policy-compliance) into
+  GREEN/YELLOW/RED traffic lights with per-flagged-page next-move suggestions.
+  Includes stale-policy detection over raw/policy-*.md files. Reports findings
+  and proposes fixes — does NOT auto-fix. Use when user says: /vault-lint,
+  /vault-lint --deep, /vault-lint --quality, /vault-lint --all,
+  /vault-lint --page <slug>, "check the vault", "audit the knowledge base",
+  "lint the wiki", "find gaps", "score vault quality".
 ---
 
 # vault-lint
@@ -85,6 +86,7 @@ Agent(
 - **Oversized pages**: pages > 20 KB → candidates for splitting.
 - **Timestamps**: pages where `ingested` or `created` frontmatter is missing.
 - **Stale open questions**: parse `projects/<slug>/questions.md` for `- [ ] <timestamp> — <question>` lines. Flag any entries where the timestamp is more than **14 days** old — these are research items the user opened via `/vault-query` but never followed up on. Each is a candidate for `/vault-autoresearch` (which can pull the oldest from the queue with no args).
+- **Stale policies**: scan `raw/policy-*.md`. Read each policy's `created:` date and `volatility:` field. TTL by volatility: `low` = 24mo, `medium` = 12mo, `high` = 6mo. Flag any policy where `now - created > TTL` in `## Stale policies` of LINT-REPORT.md. Suggest `/vault-policy '<topic>' --refresh` per stale entry. Mechanical, runs every lint pass (no flag gating). Never auto-run refresh.
 
 ### 2. Semantic integrity (LLM-assisted)
 
@@ -95,9 +97,9 @@ Agent(
 
 ### 3. Quality (--quality flag)
 
-Per-page health scoring on six dimensions. Composite score → traffic light. Always shown: traffic light + score + 1-2 weakest dimensions + next-move. Full dimension breakdown only with `--verbose`.
+Per-page health scoring on seven dimensions (D8 only fires when page declares `quality_policy:`). Composite score → traffic light. Always shown: traffic light + score + 1-2 weakest dimensions + next-move. Full dimension breakdown only with `--verbose`.
 
-#### Six dimensions
+#### Seven dimensions
 
 **D1 — CITE-DENSITY**: ratio of cited claims to total claims in `## Synthesis` + `## Key facts`. Count `[label](url)` markdown links + bare `https?://` URLs in those sections. Count claim-bearing sentences (sentence-tokenize Synthesis; count Key-facts bullets directly). Ratio = sources / claims. Score: 1.0 if ratio ≥ 0.8; linear down to 0.0 at ratio = 0.
 
@@ -120,18 +122,29 @@ Score: `exp(-age_days / τ)`. A 2-year-old page on Anthropic pricing is dead; a 
 
 Score: `resolved / total`. If page raised no questions, score = neutral 0.7. If no signals available, fall back to 0.7 (degrade gracefully).
 
+**D8 — POLICY-COMPLIANCE**: only computed for pages with `quality_policy:` frontmatter pointer.
+D8 = 0.40 * authoritative_hit_rate + 0.40 * dissent_class_coverage + 0.20 * evidence_standard_match
+- authoritative_hit_rate = fraction of cited sources matching policy's authoritative_domains globs
+- dissent_class_coverage = fraction of dissent_classes_required actually hit (read dissent_classes_found / dissent_classes_missing from page frontmatter)
+- evidence_standard_match = page content meets evidence_standard (binary: 1.0 yes / 0.0 no)
+
+Pages without `quality_policy:` (or `quality_policy: none`) → SKIP D8, re-weight remaining six dims to sum to 1.0 (same pattern as grace-period skip). Pages referencing a missing policy file → D8 = 0.0, flag RED `policy: missing`.
+
 #### Composite score (default `synthesis` profile)
 
 ```
-quality_score = 0.20 * D1_cite_density
-              + 0.20 * D2_cite_diversity
-              + 0.20 * D3_never_challenged
-              + 0.15 * D4_freshness
-              + 0.10 * D5_inbound_links
-              + 0.15 * D6_openq_resolution
+quality_score = 0.18 * D1_cite_density
+              + 0.18 * D2_cite_diversity
+              + 0.18 * D3_never_challenged
+              + 0.13 * D4_freshness
+              + 0.08 * D5_inbound_links
+              + 0.13 * D6_openq_resolution
+              + 0.12 * D8_policy_compliance
 ```
 
-Range 0.0–1.0. Display ×100.
+Range 0.0–1.0. Display ×100. D1-D6 weights drop ~10% each from prior values to make room for D8 at 0.12. Pages without `quality_policy:` skip D8 and re-weight remaining six dims to sum to 1.0 (preserves prior behavior on legacy pages).
+
+**D8 demotion rule (overrides traffic light):** any page with D8 < 0.50 → demote to RED regardless of composite score. Policy non-compliance is a hard signal — a page citing the wrong sources cannot be GREEN.
 
 #### Traffic light grade
 
@@ -166,7 +179,7 @@ D5 inbound-links is N/A — exclude from composite, re-weight remaining 5 dimens
 
 #### Per-flagged-page next-move (RED + YELLOW)
 
-Pick dimension with LOWEST normalized score. Tiebreak by dimension order (D1 > D2 > ... > D6). Map:
+Pick dimension with LOWEST normalized score. Tiebreak by dimension order (D1 > D2 > ... > D6 > D8). Map:
 
 | Weakest dim | Next move |
 |---|---|
@@ -176,6 +189,7 @@ Pick dimension with LOWEST normalized score. Tiebreak by dimension order (D1 > D
 | D4 freshness | "Re-verify time-sensitive claims; `/vault-autoresearch '<topic> 2026'`" |
 | D5 inbound-links | "Cross-link from `[[<topical-neighbor>]]` or merge into related page" |
 | D6 openq-resolution | "Run `/vault-autoresearch` on open questions, then `/vault-integrate`" |
+| D8 policy-compliance | "Re-research with policy-allowlist: `/vault-autoresearch '<topic>' --use-policy`" |
 
 If 2+ dimensions below 0.3, append "(multiple weaknesses — consider full rewrite)".
 
@@ -263,6 +277,20 @@ For 50+ pages, runtime is dominated by file I/O — read pages in parallel via b
    ### GREEN (N) — healthy
    <one-line summary, list collapsed unless --verbose>
 
+   ## Policy compliance
+
+   <only present when --quality or --all flag set; lists pages flagged on D8>
+
+   - `<page.md>` (policy: <topic-slug>, D8 = 0.32) — reason: dissent_class_coverage 0.0 (missing: practitioner, regulatory). Demoted to RED.
+   - `<page.md>` (policy: <topic-slug>, D8 = 0.45) — reason: authoritative_hit_rate 0.20 (4/20 cites match allowlist). Demoted to RED.
+   - `<page.md>` (policy: missing) — referenced policy file not found. D8 = 0.0, RED. Suggest `/vault-policy '<topic>' --regenerate`.
+
+   ## Stale policies
+
+   <mechanical scan over raw/policy-*.md; runs every lint pass>
+
+   - `policy-<topic-slug>.md` — created <YYYY-MM-DD> (age <N>d, volatility <high|medium|low>, TTL <6|12|24>mo). N pages reference. Suggest `/vault-policy '<topic>' --refresh`.
+
    ## Suggested next actions
 
    1. ...
@@ -287,3 +315,5 @@ For 50+ pages, runtime is dominated by file I/O — read pages in parallel via b
 - Single composite output: extend `LINT-REPORT.md` with `## Quality scores`. Never create `QUALITY-REPORT.md` — single audit surface.
 - Grace-period (`now - created < 14 days`) skips D3/D5/D6 — fresh pages are not yet scoreable on those.
 - When `quality_profile:` frontmatter is missing, infer from `source:` (`source: autoresearch` → synthesis; `source: probe` → probe; etc.) before falling back to default `synthesis`.
+- D8 policy-compliance only fires when page declares `quality_policy:`. Pages without the pointer (or `quality_policy: none`) skip D8 and re-weight the remaining six dims to sum to 1.0. D8 < 0.50 demotes the page to RED regardless of composite score.
+- Stale-policy scan (`raw/policy-*.md`) is mechanical and runs every lint pass — TTL by volatility (low=24mo, medium=12mo, high=6mo). Surface in `## Stale policies`. Never auto-run `/vault-policy --refresh`.

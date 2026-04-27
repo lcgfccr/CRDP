@@ -70,6 +70,7 @@ Inspired by [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6b
 | `/vault-probe [--web / --harsh]` | Blind-spot detection — scans the vault against its thesis, surfaces UNKNOWN gaps (structural prerequisites, missing stakeholders, adjacent territory, competing frameworks). Top 3 added to questions.md |
 | `/vault-analogize [[page]]` | Forced cross-domain analogy — takes one page, discovers structurally similar patterns in other domains across the vault (synthesize = user picks; analogize = discovers). Maps what each teaches the other |
 | `/vault-landscape "topic" [-N 3-7]` | Breadth-first parallel research for entering a new domain. Fans out N personas (default 5: landscape / mechanics / failure-modes / stakeholders / adversarial), each running independent web research, then merges into a landscape page. Complement to autoresearch (depth) — landscape is the mapmaker |
+| `/vault-policy "<topic>"` | Topic-aware source policy generator. Runs a 7-question reasoning chain before research, emits structured policy file consumed by autoresearch / challenge / lint / output. Steers WebSearch allowlists, dissent targeting, and surfaces Claude's biases on the topic. Honest-refuse when domains can't be named |
 | `/vault-output <format>` | Produce consumer-grade artifacts from existing vault pages (pure synthesis, no web). Five formats: report, study-guide, comparison, timeline, glossary. Outputs land in `outputs/`, never `pages/` — ship-and-forget vs compounding knowledge |
 | `/vault-lint --quality / --all` | Adds per-page quality scoring on 6 dimensions (cite-density, cite-diversity, never-challenged, freshness, inbound-links, open-q resolution) → GREEN / YELLOW / RED traffic light + per-page next-move suggestion |
 | `/vault-integrate [[page]]` | Fold research findings back into source pages (diff + confirm) |
@@ -137,6 +138,20 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 ---
 
 ## Changelog
+
+### v1.0.7 — Topic-aware quality policy
+The vault now reasons about *what good sources mean for a specific topic* before researching, instead of inheriting whatever the search engine returns. Closes the "AI source quality is unchanged" gap from prior versions: web search bias is bounded by an explicit, auditable, per-topic policy.
+
+- **`/vault-policy "<topic>"`** — new skill. Runs a 7-question reasoning chain (CLASSIFY → EVIDENCE STANDARD → AUTHORITATIVE DOMAINS → DISSENT → VOLATILITY+RECENCY → RISK FLAGS → CLAUDE BIAS CHECK) and emits a structured policy file at `projects/<slug>/raw/policy-<topic-slug>.md`. Mechanical confidence calibration (low if <3 domains named, high if 5-7 + clean risk flags). Honest-refuse path — when Claude can't name an authoritative domain, the skill REFUSES rather than fakes one. No self-critique step (sycophancy paradox). Manual re-policy only.
+- **`/vault-autoresearch` policy-aware**: Round 1 step 0.5 reads the policy, passes `allowed_domains` / `blocked_domains` to WebSearch by confidence (high → allowlist; medium → allowlist round 1 only; low → blocklist only). Round 3 counter-evidence pass runs class-targeted searches per `dissent_classes_required` (academic → arxiv; regulatory → .gov; practitioner → postmortem queries). Topical-fallback when exact slug doesn't match: scans `policy-*.md` for stem/class overlap, uses best match as advisory.
+- **`/vault-challenge` policy-aware**: step 2.5 calibrates WEAKENED threshold to `evidence_standard`. `risk_flags: [hype-cycle]` lowers the WEAKENED bar for vendor-marketing claims. Adversarial searches start from `dissent_likely_locations`.
+- **`/vault-ingest` policy-aware**: step 3a.5 auto-classifies source URL's `source_class` (regulatory/academic/standards-body/practitioner/journalism/vendor/forum) and inherits `quality_policy:` pointer when matching topic.
+- **`/vault-lint --quality` D8 dimension**: per-page policy compliance scoring. `D8 = 0.40 * authoritative_hit_rate + 0.40 * dissent_class_coverage + 0.20 * evidence_standard_match`. Composite weight 0.12. Pages <0.50 D8 demoted to RED. Adds stale-policy detection over `raw/policy-*.md` (TTL: low=24mo, medium=12mo, high=6mo).
+- **`/vault-output` policy-aware**: every output template (report / study-guide / comparison / timeline / glossary) auto-injects `## Source caveats` from each input page's policy. >50% input share of `source_pool_warning` → escalated to prominent callout.
+- **`/vault-synthesize` policy-aware**: multi-input convergence — same policy → inherit; different policies → user prompted (most-cautious / new-policy / proceed-anyway).
+- **`/vault-landscape` policy-aware**: pre-spawn policy check; passes constraints (allowlist, blocklist, dissent classes) into each persona's WebSearch params.
+
+Net effect: the path of least resistance now produces topic-calibrated research. Web search inherits an explicit per-topic policy. The vault is honest about what its sources are and aren't, end-to-end through to consumer-facing outputs.
 
 ### v1.0.6 — Force-bypass discipline (architectural primary + targeted in-flow + audit catch)
 The verification gate from v1.0.5 had a single escape hatch (`--force "<reason>"`). Over time, that escape becomes muscle memory. v1.0.6 restructures the gate to eliminate the failure mode on the highest-risk paths.

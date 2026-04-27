@@ -148,6 +148,13 @@ inputs: [<page-slug-1>, <page-slug-2>, ...]
 ## Executive summary
 <3-5 sentences. The headline finding. What a reader gets in 30s.>
 
+## Source caveats
+<For each input page: read `quality_policy:` pointer; fetch policy file if present.
+If any input has `source_pool_warning != null`, add at top:
+> ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
+
+If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
+
 ## Background
 <2-3 paragraphs: what the topic is, why it matters, scope of the report.>
 
@@ -183,6 +190,13 @@ inputs: [<page-slug-1>, ...]
 ## Overview
 <3-5 sentence orientation.>
 
+## Source caveats
+<For each input page: read `quality_policy:` pointer; fetch policy file if present.
+If any input has `source_pool_warning != null`, add at top:
+> ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
+
+If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
+
 ## Key concepts
 - **<term>** — <definition pulled from pages, [[page-slug]]>
 - ...
@@ -214,6 +228,13 @@ inputs: [page-a, page-b, ...]
 ---
 
 # Comparison: <A> vs <B> [vs <C>]
+
+## Source caveats
+<For each input page: read `quality_policy:` pointer; fetch policy file if present.
+If any input has `source_pool_warning != null`, add at top:
+> ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
+
+If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
 
 ## At a glance
 
@@ -254,6 +275,13 @@ inputs: [<page-slug-1>, ...]
 
 <one-paragraph framing.>
 
+## Source caveats
+<For each input page: read `quality_policy:` pointer; fetch policy file if present.
+If any input has `source_pool_warning != null`, add at top:
+> ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
+
+If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
+
 ## <YYYY> or <era>
 - **<event>** — <description, [[page-slug]]>
 
@@ -280,6 +308,13 @@ inputs: [<page-slug-1>, ...]
 ---
 
 # Glossary: <scope>
+
+## Source caveats
+<For each input page: read `quality_policy:` pointer; fetch policy file if present.
+If any input has `source_pool_warning != null`, add at top:
+> ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
+
+If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
 
 ## A
 - **Term** — definition. From [[page-slug]].

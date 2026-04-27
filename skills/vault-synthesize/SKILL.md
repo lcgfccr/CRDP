@@ -57,6 +57,23 @@ Agent(
 
 ## Procedure
 
+### 0.5 Resolve policy (multi-input convergence)
+
+Before main synthesis work, check input pages' `quality_policy:` pointers.
+
+1. Read each input's frontmatter `quality_policy:` field.
+2. All inputs share same policy → inherit it. Tag synthesis output frontmatter `quality_policy: <inherited-slug>`.
+3. Inputs have DIFFERENT policies → prompt user:
+   ```
+   Inputs have different policies — derive most-cautious or run /vault-policy on synthesis topic? (most-cautious | new-policy | proceed-anyway)
+   ```
+   Wait for user response.
+   - `most-cautious` → derive policy combining strictest fields from inputs (strictest evidence_standard: rfc > peer-reviewed > benchmark-numbers > postmortem > mixed; union of dissent_classes_required, blocklist_extras, risk_flags; MIN of confidence_in_assessment). Save as `raw/policy-<synthesis-slug>-derived.md`. Tag `quality_policy: <synthesis-slug>-derived`.
+   - `new-policy` → recommend running `/vault-policy "<synthesis topic>"` first, exit.
+   - `proceed-anyway` → continue without policy, tag output `policy_status: declined`.
+4. All inputs `quality_policy: none` → synthesis inherits none. No enforcement.
+5. Tag synthesis output frontmatter accordingly.
+
 ### 1. Read all input pages fully
 
 For each input slug, read `pages/<input-slug>.md`. Extract:
