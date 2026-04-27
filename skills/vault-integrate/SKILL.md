@@ -140,6 +140,24 @@ The `> **Updated:**` blockquote is the canonical marker for integrated findings 
 
 ### 4. Show diff and confirm — BEFORE WRITING
 
+**4a. Correction-conflict detection (BEFORE displaying diff):**
+
+For each source page, read its `corrections:` frontmatter array. For each active (non-superseded) correction:
+- Compare the proposed integration text (blockquote or open-question resolution) against the correction's `text` field.
+- Use semantic match, not exact-string. A conflict exists when the integration asserts something the correction has marked OVERRIDE-wrong, RETIRE-dead, or contradicts an ADD entry.
+- If conflict detected, surface inline in the diff display:
+
+```
+⚠ Conflict: integration text contradicts user correction <id> [tier=<CITED|PRACTITIONER|OPINION>]
+  Correction: "<correction.text>"
+  Integration: "<proposed integration text>"
+  Action options: (apply-anyway / skip / mark-superseded / cancel)
+```
+
+Demand per-edit user decision. NEVER auto-resolve. NEVER pre-pick an option.
+
+**4b. Display diff:**
+
 For each source page, display proposed changes clearly before touching any file:
 
 ```
@@ -161,6 +179,22 @@ Apply? (yes / skip / edit)
 ```
 
 Wait for explicit response before proceeding. `edit` → ask what to change. `skip` → move to next page. `yes` → write.
+
+**4c. Conflict-resolution branches (only when 4a surfaced a conflict):**
+
+- **apply-anyway** → integration proceeds. Append a warning blockquote to the source page, placed adjacent to the integrated finding:
+  ```
+  > ⚠ This integration was applied despite contradicting [[corrections/<id>]] (tier: <tier>). User chose apply-anyway.
+  ```
+- **skip** → drop just this conflicting edit; continue with non-conflicting edits on the same page.
+- **mark-superseded** → integration proceeds normally (no warning blockquote). Emit a `--supersede <correction-id>` event suggestion in the final summary so the user can optionally run `/vault-correct --supersede <id>` afterward. NEVER auto-create the supersede.
+- **cancel** → abort the entire integration for this source page; move to next page.
+
+**4d. Push-on-correct cascade (annotation only):**
+
+When integrating into a source page that has its own `corrections:` array, walk the page's `integrated:` graph one hop downstream. For each downstream page:
+- Add a frontmatter annotation: `correction_cascade: [<source-correction-id>]` (read-only flag — surfaced by `/vault-lint` as YELLOW so downstream pages get re-reviewed given the upstream correction).
+- NEVER auto-edit downstream page body. Annotation is the only write.
 
 ### 5. Apply confirmed changes
 
@@ -203,3 +237,7 @@ Research page marked integrated: [<slugs>].
   - `source: autoresearch` / `source: vault-synthesize` → REFUSED unless `challenged:` field exists. **`--force` is rejected on these page types** — too high-risk inferential. Must run /vault-challenge first.
   - `source: conversation` / `source: ingest` (or `source_type: paper | article | blog | thread | code | paste`) / no `source:` field (legacy) → REFUSED if `verification: none` or missing AND no `challenged:` field, unless `--force "<reason>"` is passed. The forced bypass logs `INTEGRATE-FORCE — [[page]] — <reason>` to `log.md`.
 - When `--force` is accepted, Section 0b summarizes any `## Adversarial challenge` content / `(contested by ...)` annotations and demands explicit `y` before proceeding. `n` (or anything not `y`) → abort, do NOT log INTEGRATE-FORCE, do NOT touch any file.
+- CORRECTION CONFLICTS are ALWAYS surfaced at the diff stage — NEVER auto-resolved. Step 4a runs before every diff display. Tier (CITED / PRACTITIONER / OPINION) and rationale are shown verbatim alongside the conflict line.
+- `apply-anyway` requires explicit user choice AND writes a warning blockquote inline next to the integrated finding referencing `[[corrections/<id>]]` with tier — audit trail is non-negotiable.
+- `mark-superseded` does NOT auto-create a supersede event. It emits a `--supersede <correction-id>` suggestion in the final summary; the user runs `/vault-correct` themselves if they want it.
+- Push-on-correct cascade is ANNOTATION-ONLY. Walk `integrated:` graph one hop downstream; add `correction_cascade: [<id>]` frontmatter flag. NEVER auto-edit downstream page bodies. `/vault-lint` surfaces the flag as YELLOW for re-review.

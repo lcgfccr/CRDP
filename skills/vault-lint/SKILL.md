@@ -7,8 +7,10 @@ description: >
   dimensions (cite-density, cite-diversity, never-challenged, freshness,
   inbound-links, open-question resolution, D8 policy-compliance) into
   GREEN/YELLOW/RED traffic lights with per-flagged-page next-move suggestions.
-  Includes stale-policy detection over raw/policy-*.md files. Reports findings
-  and proposes fixes — does NOT auto-fix. Use when user says: /vault-lint,
+  Includes stale-policy detection over raw/policy-*.md files,
+  stale-correction detection over corrections/*.md files, and correction
+  density alarms (per-page, per-vendor, per-tier). Reports findings and
+  proposes fixes — does NOT auto-fix. Use when user says: /vault-lint,
   /vault-lint --deep, /vault-lint --quality, /vault-lint --all,
   /vault-lint --page <slug>, "check the vault", "audit the knowledge base",
   "lint the wiki", "find gaps", "score vault quality".
@@ -87,6 +89,15 @@ Agent(
 - **Timestamps**: pages where `ingested` or `created` frontmatter is missing.
 - **Stale open questions**: parse `projects/<slug>/questions.md` for `- [ ] <timestamp> — <question>` lines. Flag any entries where the timestamp is more than **14 days** old — these are research items the user opened via `/vault-query` but never followed up on. Each is a candidate for `/vault-autoresearch` (which can pull the oldest from the queue with no args).
 - **Stale policies**: scan `raw/policy-*.md`. Read each policy's `created:` date and `volatility:` field. TTL by volatility: `low` = 24mo, `medium` = 12mo, `high` = 6mo. Flag any policy where `now - created > TTL` in `## Stale policies` of LINT-REPORT.md. Suggest `/vault-policy '<topic>' --refresh` per stale entry. Mechanical, runs every lint pass (no flag gating). Never auto-run refresh.
+- **Stale corrections**: parse `corrections/*.md`. For each correction with `status: active`, check tier vs timestamp:
+  - `tier: CITED` with `timestamp` > 6 months → flag as **expired-CITED** (URLs rot, RFCs revise — re-validate).
+  - `tier: PRACTITIONER` with `timestamp` > 12 months → flag as **expired-PRACTITIONER** (lived experience drifts).
+  - `tier: OPINION` → always flag as **low-trust** (no expiry, but always shown in audit so OPINION-tier entries can never silently age into authority).
+  Report destination: `## Stale corrections` in LINT-REPORT.md. Suggest `/vault-correct --revalidate <id>` per expired entry. Mechanical, runs every lint pass.
+- **Orphan corrections**: corrections whose `target` references a page slug that no longer exists in `pages/` → RED flag in `## Stale corrections`. Suggest `/vault-correct revoke <id>` or restore the missing page.
+- **Correction density — per-page**: count active corrections per `target` page. If any page has **>5 active corrections** → YELLOW flag (potential bias drift — correction stack is becoming the page). Report destination: `## Correction density warnings`.
+- **Correction density — per-vendor**: extract registrable domain from each correction's `source` URL. If **>3 corrections cite the same vendor URL** (or domain) → YELLOW flag (potential vendor-laundering — same source dressed as multiple corrections). Report destination: `## Correction density warnings`.
+- **Correction density — per-tier**: count active corrections by tier across the whole vault. If **OPINION-tier corrections > 50% of total active** → YELLOW flag (low-evidence vault — preferences outweigh cited/practitioner evidence). Report destination: `## Correction density warnings`.
 
 ### 2. Semantic integrity (LLM-assisted)
 
@@ -145,6 +156,11 @@ quality_score = 0.18 * D1_cite_density
 Range 0.0–1.0. Display ×100. D1-D6 weights drop ~10% each from prior values to make room for D8 at 0.12. Pages without `quality_policy:` skip D8 and re-weight remaining six dims to sum to 1.0 (preserves prior behavior on legacy pages).
 
 **D8 demotion rule (overrides traffic light):** any page with D8 < 0.50 → demote to RED regardless of composite score. Policy non-compliance is a hard signal — a page citing the wrong sources cannot be GREEN.
+
+**D8 corrections-aware calibration:**
+- **Policy-override merge**: for pages whose `quality_policy:` points to a policy file with `policy_overrides:` entries (from corrections of action `CORRECT-POLICY`), merge those overrides into `authoritative_domains` / `dissent_classes_required` at compute time. Lint reports show `(D8 adjusted: <N> policy corrections applied)` in `## Quality scores`.
+- **Rationale-suppression**: for pages with `policy_overrides:` correction targeting the exact claim that failed D8 (e.g., wrong domain, wrong evidence type), suppress D8 demotion to RED **only if** the correction's `rationale:` field is non-empty. User took responsibility — correction stands as user-validation. If `rationale:` is empty, D8 demotion still fires. Lint report annotates the suppression on the D8 row so audits can review.
+- **No quality bonus for OVERRIDE / ADD corrections**: pages with `corrections:` array of action `OVERRIDE` or `ADD` get NO quality bonus (rejected D9 dimension — would penalize uncorrected pages and incentivize fake corrections). Corrections are a substitution / annotation signal, not a credit.
 
 #### Traffic light grade
 
@@ -266,6 +282,7 @@ For 50+ pages, runtime is dominated by file I/O — read pages in parallel via b
    ### RED (N) — needs attention
    - `<page.md>` (score 0.42, profile: synthesis) — weak: D1 cite-density 0.2, D3 never-challenged.
      Next: run `/vault-challenge [[<page>]]` and ingest 2+ sources.
+   - `<page.md>` (score 0.48, profile: synthesis) — D8 = 0.41 (would demote to RED) but **demotion suppressed by correction <c-id>** with rationale "<…>". Score reflects raw composite.
 
    ### YELLOW (N) — review when convenient
    - `<page.md>` (score 0.61, profile: synthesis) — weak: D5 inbound-links (orphan-adjacent).
@@ -290,6 +307,28 @@ For 50+ pages, runtime is dominated by file I/O — read pages in parallel via b
    <mechanical scan over raw/policy-*.md; runs every lint pass>
 
    - `policy-<topic-slug>.md` — created <YYYY-MM-DD> (age <N>d, volatility <high|medium|low>, TTL <6|12|24>mo). N pages reference. Suggest `/vault-policy '<topic>' --refresh`.
+
+   ## Stale corrections
+
+   <mechanical scan over corrections/*.md; runs every lint pass; lists expired CITED + PRACTITIONER + always-flagged OPINION + orphans>
+
+   - `corrections/<page>-<ts>-<id>.md` — tier: CITED, age <N>d (>180d) → **expired-CITED**. Target `[[<page>]]`. Suggest `/vault-correct --revalidate <id>`.
+   - `corrections/<page>-<ts>-<id>.md` — tier: PRACTITIONER, age <N>d (>365d) → **expired-PRACTITIONER**. Target `[[<page>]]`. Suggest `/vault-correct --revalidate <id>`.
+   - `corrections/<page>-<ts>-<id>.md` — tier: OPINION → **low-trust** (no expiry; always shown). Target `[[<page>]]`.
+   - `corrections/<page>-<ts>-<id>.md` — **orphan**: target `[[<missing-page>]]` no longer exists. RED. Suggest `/vault-correct revoke <id>` or restore page.
+
+   ## Correction density warnings
+
+   <mechanical; runs every lint pass>
+
+   ### Per-page (>5 active corrections)
+   - `[[<page>]]` — <N> active corrections. Bias drift risk: correction stack overgrew the page.
+
+   ### Per-vendor (>3 corrections cite same vendor URL/domain)
+   - `<vendor.com>` — cited by <N> corrections across <M> pages: <list>. Vendor-laundering risk.
+
+   ### Per-tier (OPINION > 50% of total active)
+   - OPINION = <N>/<total> (<pct>%) of active corrections. Low-evidence vault.
 
    ## Suggested next actions
 
@@ -317,3 +356,6 @@ For 50+ pages, runtime is dominated by file I/O — read pages in parallel via b
 - When `quality_profile:` frontmatter is missing, infer from `source:` (`source: autoresearch` → synthesis; `source: probe` → probe; etc.) before falling back to default `synthesis`.
 - D8 policy-compliance only fires when page declares `quality_policy:`. Pages without the pointer (or `quality_policy: none`) skip D8 and re-weight the remaining six dims to sum to 1.0. D8 < 0.50 demotes the page to RED regardless of composite score.
 - Stale-policy scan (`raw/policy-*.md`) is mechanical and runs every lint pass — TTL by volatility (low=24mo, medium=12mo, high=6mo). Surface in `## Stale policies`. Never auto-run `/vault-policy --refresh`.
+- Stale-correction scan (`corrections/*.md`) is mechanical and runs every lint pass — tier expiry (CITED=6mo, PRACTITIONER=12mo, OPINION=never-expires-but-always-flagged). Surface in `## Stale corrections`. Orphan corrections (target page missing) → RED. Never auto-run `/vault-correct --revalidate`.
+- Correction density alarms (per-page >5, per-vendor >3, per-tier OPINION >50%) are mechanical and run every lint pass. Surface in `## Correction density warnings`. YELLOW only — informational, never block downstream tooling.
+- D8 corrections-aware: `policy_overrides:` from CORRECT-POLICY corrections merge into D8's authoritative_domains / dissent_classes_required at compute time. D8 demotion-to-RED is suppressed only when an OVERRIDE correction targets the failing claim AND has a non-empty `rationale:`. Empty rationale → demotion still fires. NO quality bonus for OVERRIDE / ADD corrections — corrections are not credit (rejected D9).

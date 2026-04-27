@@ -93,6 +93,16 @@ Agent(
    - **Escalation**: allowlist returns <3 results → drop most-restrictive query terms (1 retry) → try `dissent_likely_locations` as allowlist → fall back to blocklist-only with warning. Cap 2 retries. Log to frontmatter `policy_compliance.escalation: ["allowlist-thin"]`.
    - Tag synthesis page frontmatter `quality_policy: <topic-slug>`.
 
+0.6. **Read cross-page corrections** (always-on; before WebSearch fires). Skip only if `--ignore-corrections` flag set (warning still surfaces in round 3).
+   - Scan `projects/<slug>/pages/*.md` for pages with topic-overlap to current research topic that have a `corrections:` array in frontmatter. Use Claude semantic judgement on title + tags + topic stems — NOT keyword-only.
+   - For each overlapping page, read its `corrections:` entries. Use as **starting context** for this research:
+     - **OVERRIDE** corrections → claim X may be wrong; verify the corrected version. Treat user-asserted text as ground-truth-for-investigation (not citeable, but informs query design).
+     - **ADD** corrections → topic Y is missing; investigate. Treat as known-known; use to expand query coverage.
+     - **RETIRE** corrections → claim Z is obsolete; do not surface as live finding.
+   - If correction has `dissent_likely_locations` field (or related-policy `policy_overrides:` mentions dissent locations), use as additional adversarial query starting points in round 3 counter-evidence pass.
+   - Tag synthesis page frontmatter `correction_context: [<list of correction ids read>]`. If none found, omit the key.
+   - Surface in main-context confirmation when N>0: "Found N corrections on overlapping pages [[a]], [[b]]. Will use as starting context — proceed?". Skip prompt if user said "just go" / no overlapping pages found.
+
 1. `WebSearch` the topic. Pull ~5-10 distinct URLs.
 2. For each top result, `WebFetch` and extract key claims + source.
 3. Write round-1 notes to `projects/<slug>/raw/autoresearch-<topic-slug>-r1.md`: key claims, disagreements, URLs.
@@ -170,9 +180,21 @@ Adds ~1-2 WebFetch calls for a mandatory counter-evidence pass before writing. N
 
 5. **Append new gaps to `questions.md`**: for each item under "What's still unclear", append a new `- [ ]` line. Dedupe against existing entries (case-insensitive substring). Cap: 5 new entries per research run.
 
-6. Update `index.md` with the new page. Revise `overview.md` only if synthesis meaningfully shifts the project's thesis.
+6. **Verify synthesis vs corrections (always-on safety)**: after writing the synthesis page, before updating `index.md` and `log.md`. ALWAYS-ON — no flag skips this step. If `--ignore-corrections` was passed (round 0.6 skipped), this verification still runs and surfaces contradictions.
+   - Read all corrections referenced in the page's `correction_context:` frontmatter (or, if `--ignore-corrections` was set, re-scan overlapping pages now to load them anyway).
+   - For each correction, semantically check the synthesis text (`## Synthesis`, `## Key facts`, `## Tensions & contradictions`) does NOT contradict the corrected claim. Use Claude semantic judgement, not keyword match.
+   - **Contradiction detected** → annotate the synthesis page (append to `## Tensions & contradictions`, do NOT silently overwrite or capitulate):
+     ```
+     > ⚠ Synthesis claim X contradicts user correction <id> [tier=<tier>]: "<correction text>"
+     > Decide: re-run research / accept synthesis as new evidence / mark correction superseded
+     ```
+     Tier values: `CITED` / `PRACTITIONER` / `OPINION` (read from correction frontmatter; default to `OPINION` if missing).
+   - **No contradiction** → no annotation; record `correction_verification: passed` in frontmatter.
+   - Don't silently override the user. Don't silently capitulate to user. Force explicit reconciliation.
 
-7. Append to `log.md`:
+7. Update `index.md` with the new page. Revise `overview.md` only if synthesis meaningfully shifts the project's thesis.
+
+8. Append to `log.md`:
    ```
    - <timestamp> — AUTORESEARCH — [[<topic-slug>]] — <N> sources — <1-line takeaway> — <answered-from-queue | topic-explicit>
    ```
@@ -221,3 +243,6 @@ At the end of round 3, explicitly ask:
 - Huge topic → decompose, ask which sub-topic first.
 - Never overwrite an existing synthesis page without explicit OK — ask: append, v2, or rename.
 - When pulling from the queue, ALWAYS mark the question answered on completion — otherwise the queue grows stale and `/vault-lint` will flag it.
+- **Round 0.6 reads cross-page corrections as starting context (always-on).** Scans `pages/*.md` for topic-overlap pages with `corrections:` arrays; uses OVERRIDE / ADD / RETIRE entries to shape query design and tag synthesis frontmatter `correction_context:`.
+- **Round 3 final step verifies synthesis vs corrections (always-on safety, no flag to skip).** Reads correction IDs in `correction_context:`, semantically checks for contradictions, annotates with tier-labeled warning blockquote (CITED / PRACTITIONER / OPINION) if conflict detected. Forces explicit reconciliation — no silent override, no silent capitulation.
+- **`--ignore-corrections` flag exists** (escape hatch): skips round 0.6 starting-context priming, but the round 3 verification step STILL runs and surfaces contradictions. The flag changes priors, not safety.

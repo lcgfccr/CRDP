@@ -71,6 +71,7 @@ Inspired by [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6b
 | `/vault-analogize [[page]]` | Forced cross-domain analogy — takes one page, discovers structurally similar patterns in other domains across the vault (synthesize = user picks; analogize = discovers). Maps what each teaches the other |
 | `/vault-landscape "topic" [-N 3-7]` | Breadth-first parallel research for entering a new domain. Fans out N personas (default 5: landscape / mechanics / failure-modes / stakeholders / adversarial), each running independent web research, then merges into a landscape page. Complement to autoresearch (depth) — landscape is the mapmaker |
 | `/vault-policy "<topic>"` | Topic-aware source policy generator. Runs a 7-question reasoning chain before research, emits structured policy file consumed by autoresearch / challenge / lint / output. Steers WebSearch allowlists, dissent targeting, and surfaces Claude's biases on the topic. Honest-refuse when domains can't be named |
+| `/vault-correct [[page]] <verb>` | User-as-source-of-truth override channel. Verbs: OVERRIDE / ADD / RETIRE / CORRECT-POLICY with mandatory tier (CITED / PRACTITIONER / OPINION). Mechanical hallucination check + discrete-options refine path defends against sycophancy. Reversible via `--revoke` / `--supersede`. Corrections are testable claims, not gospel — flow through `/vault-challenge` like any other claim |
 | `/vault-output <format>` | Produce consumer-grade artifacts from existing vault pages (pure synthesis, no web). Five formats: report, study-guide, comparison, timeline, glossary. Outputs land in `outputs/`, never `pages/` — ship-and-forget vs compounding knowledge |
 | `/vault-lint --quality / --all` | Adds per-page quality scoring on 6 dimensions (cite-density, cite-diversity, never-challenged, freshness, inbound-links, open-q resolution) → GREEN / YELLOW / RED traffic light + per-page next-move suggestion |
 | `/vault-integrate [[page]]` | Fold research findings back into source pages (diff + confirm) |
@@ -138,6 +139,20 @@ Caveman and GSD update from their official repos independently. Re-running `inst
 ---
 
 ## Changelog
+
+### v1.0.8 — User-as-source-of-truth correction channel
+Web sources are bounded. Some knowledge lives only in the user's lived experience, paid databases, post-cutoff developments, or domain expertise no public source captures. v1.0.8 adds the structural override path so the user can inject ground-truth without polluting the vault.
+
+- **`/vault-correct`** — new skill. Verb-routed action dispatch (OVERRIDE / ADD / RETIRE / CORRECT-POLICY) with mandatory three-tier trust declaration (CITED / PRACTITIONER / OPINION). Every correction lands as an audit record at `corrections/<page>-<ts>-<id>.md`, indexed in target page frontmatter, rendered with tier label, logged. Reversible via `--revoke` and `--supersede` — history never silently deleted.
+- **Sycophancy-resistant by construction.** Mechanical hallucination check runs contradiction detection across target page + 1-hop neighbors before any write. Conflicts surface with discrete options (apply / refine / defer / cancel) — NOT free-form "are you sure?" prompts (documented to degrade Claude accuracy 98% → 56%). Vendor-marketing URLs auto-demote CITED to PRACTITIONER. CITED corrections trigger source-URL WebFetch verification.
+- **`/vault-challenge` corrections-aware**: OVERRIDE corrections substitute the claim AND test it (corrections are not gospel — entered into adversarial pipeline same as web claims). RETIRE skips with audit note. `--trust-corrections` flag for skip-without-test.
+- **`/vault-lint` corrections-aware**: stale-correction detection (CITED 6mo, PRACTITIONER 12mo, OPINION never expires), correction-density alarms (per-page >5, per-vendor >3, per-tier OPINION >50%). D8 rationale-suppression for policy_overrides with non-empty rationale.
+- **`/vault-integrate` corrections-aware**: conflict detection at diff stage; per-edit user decision required (apply-anyway / skip / mark-superseded / cancel). apply-anyway emits warning blockquote in target page. Push-on-correct annotates 1-hop downstream pages.
+- **`/vault-output` corrections-aware**: every output template (report / study-guide / comparison / timeline / glossary) auto-injects `## Author notes` block with tier labels. CITED renders prominently; PRACTITIONER with caveat; OPINION explicitly framed (never substitutes Findings without `--allow-opinion-override`). >50% input-share threshold escalates to H1 callout.
+- **`/vault-autoresearch` corrections-aware**: Round 1 step 0.6 reads cross-page corrections as starting context (always-on). Round 3 final step verifies synthesis against corrections — flags contradictions without auto-resolving. `--ignore-corrections` flag exists but warning still surfaces.
+- **`/vault-policy` corrections-preserving**: `policy_overrides:` array survives `--refresh` regenerations verbatim. Conflicts between regenerated base fields and existing overrides surface at confirmation, never silent resolution.
+
+Net effect: the user is now a first-class source of truth, but corrections are auditable, testable claims — not gospel laundered as research finding. The structural defenses prevent the discipline from depending on Claude's runtime judgment.
 
 ### v1.0.7 — Topic-aware quality policy
 The vault now reasons about *what good sources mean for a specific topic* before researching, instead of inheriting whatever the search engine returns. Closes the "AI source quality is unchanged" gap from prior versions: web search bias is bounded by an explicit, auditable, per-topic policy.

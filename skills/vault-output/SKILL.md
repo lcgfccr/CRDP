@@ -7,6 +7,8 @@ description: >
   study-guide, comparison, timeline, glossary. Style modifiers tune length, not
   structure. Outputs land in projects/<slug>/outputs/, never in pages/. Every
   non-trivial claim cites its source page via wikilink to mitigate hallucination.
+  Respects per-input corrections via ## Author notes block — substituted/added
+  claims surfaced with tier labels (CITED / PRACTITIONER / OPINION).
   Use when user says: /vault-output, "generate report from vault",
   "create comparison", "build study guide", "make timeline",
   "produce glossary", "/vault-output report --topic X",
@@ -115,6 +117,40 @@ Cap: 20 pages max. If `--style detailed` with > 20 pages, abort and tell user to
 
 Frontmatter, `## Summary` / `## Synthesis`, `## Key facts` / `## Key claims`, `## Tensions`, `## Open questions`, body. If a page cannot be read, abort and name it.
 
+### 2.5 Read corrections per input page
+
+For each input page, read frontmatter `corrections:` array. For every entry, fetch the full record at `corrections/<id>.md` (per /vault-correct two-part schema). Record the entry's `action` (OVERRIDE / ADD / RETIRE / CORRECT-POLICY), `tier` (CITED / PRACTITIONER / OPINION), `text`, `rationale`, `source` (`source_url` or `source_doc` for CITED).
+
+Action semantics during synthesis:
+- **OVERRIDE** — substitute the corrected text for the original claim in the output. Original claim is wrong; correction is ground-truth-for-substitution.
+- **ADD** — include the added context as additional content (extra finding, extra Q&A, extra timeline event, extra glossary term).
+- **RETIRE** — omit the retired claim from the output entirely.
+- **CORRECT-POLICY** — applies to policy files, not synthesis pages. Skip in vault-output.
+
+Every substituted/added correction MUST appear as a labeled visible reference in the `## Author notes` section of the output. Tier label format:
+
+```
+## Author notes
+- [CITED] <correction text> — [[<page>]] (per user correction <id>, source: <url>)
+- [PRACTITIONER] <correction text> — [[<page>]] (per user correction <id>, based on practitioner experience, not external citation)
+- [OPINION] <correction text> — [[<page>]] (per user correction <id>, user opinion)
+```
+
+Display priority by tier:
+- **CITED** — shown prominently, treated near-authoritative. Cite source URL/doc next to the entry.
+- **PRACTITIONER** — shown with practitioner caveat: "based on practitioner experience, not external citation".
+- **OPINION** — shown with explicit "user opinion" framing. OPINION substitutions get extra scrutiny — by default OPINION-tier corrections do NOT substitute Key facts / Findings / Synthesis claims; they add to a labeled annotation. Forced substitution only if user passes `--allow-opinion-override`.
+
+Inline citation rule:
+- **Default mode**: corrections appear ONLY in `## Author notes` section, not inline in body. Substitution is silent in body; provenance lives in Author notes. Prevents stealth-laundering of OPINION-tier content as research finding.
+- **`--show-corrections` flag OR `--style detailed`**: corrections appear inline alongside content with `[per <tier> correction]` annotation next to the substituted/added claim. Author notes section still rendered.
+
+Aggregation alarm:
+- If >50% of input pages share corrections of the same tier, escalate to a callout at top of output (immediately under the H1 title), before `## Source caveats`:
+  ```
+  > ⚠ This output incorporates substantial user corrections (N corrections across M inputs, mostly tier <X>). Treat substituted claims with appropriate confidence.
+  ```
+
 ### 3. Apply format-specific extraction
 
 - **report**: pull findings from Key facts across pages, tensions from Tensions sections, recommendations distilled from synthesis.
@@ -154,6 +190,19 @@ If any input has `source_pool_warning != null`, add at top:
 > ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
 
 If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
+
+## Author notes
+<Render only if any input page has corrections. Per /vault-correct two-part schema:
+- For OVERRIDE corrections: substitute the corrected claim text in the Findings / Background / Recommendations.
+- For ADD corrections: include the added context as additional content.
+- For RETIRE corrections: omit the retired claim from output.
+- Each substituted/added correction gets a labeled visible reference here:
+  - [CITED] <correction text> — [[<page>]] (per user correction <id>, source: <url>)
+  - [PRACTITIONER] <correction text> — [[<page>]] (per user correction <id>, based on practitioner experience, not external citation)
+  - [OPINION] <correction text> — [[<page>]] (per user correction <id>, user opinion)
+Default: corrections appear ONLY here, not inline in body. With --show-corrections OR --style detailed: also annotate the substituted claim in body with `[per <tier> correction]`.
+If >50% of inputs share corrections of same tier, render an aggregation callout immediately under H1 (before Source caveats):
+> ⚠ This output incorporates substantial user corrections (N corrections across M inputs, mostly tier <X>). Treat substituted claims with appropriate confidence.>
 
 ## Background
 <2-3 paragraphs: what the topic is, why it matters, scope of the report.>
@@ -197,6 +246,19 @@ If any input has `source_pool_warning != null`, add at top:
 
 If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
 
+## Author notes
+<Render only if any input page has corrections. Per /vault-correct two-part schema:
+- For OVERRIDE corrections: substitute the corrected definition / Q&A answer in Key concepts / Core questions / Common pitfalls.
+- For ADD corrections: include as additional Q&A entry or extra Key concept.
+- For RETIRE corrections: omit the retired claim from output.
+- Each substituted/added correction gets a labeled visible reference here:
+  - [CITED] <correction text> — [[<page>]] (per user correction <id>, source: <url>)
+  - [PRACTITIONER] <correction text> — [[<page>]] (per user correction <id>, based on practitioner experience, not external citation)
+  - [OPINION] <correction text> — [[<page>]] (per user correction <id>, user opinion)
+Default: corrections appear ONLY here, not inline in body. With --show-corrections OR --style detailed: also annotate the substituted claim in body with `[per <tier> correction]`.
+If >50% of inputs share corrections of same tier, render an aggregation callout immediately under H1 (before Source caveats):
+> ⚠ This output incorporates substantial user corrections (N corrections across M inputs, mostly tier <X>). Treat substituted claims with appropriate confidence.>
+
 ## Key concepts
 - **<term>** — <definition pulled from pages, [[page-slug]]>
 - ...
@@ -235,6 +297,19 @@ If any input has `source_pool_warning != null`, add at top:
 > ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
 
 If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
+
+## Author notes
+<Render only if any input page has corrections. Per /vault-correct two-part schema:
+- For OVERRIDE corrections: substitute the corrected text in the relevant matrix cell / Where-they-agree / Where-they-differ entry.
+- For ADD corrections: include as additional matrix cell content or extra differentiator.
+- For RETIRE corrections: omit the retired claim. If two pages' corrections disagree on the same dimension, flag in `## Where they differ` as `(corrections disagree)`.
+- Each substituted/added correction gets a labeled visible reference here:
+  - [CITED] <correction text> — [[<page>]] (per user correction <id>, source: <url>)
+  - [PRACTITIONER] <correction text> — [[<page>]] (per user correction <id>, based on practitioner experience, not external citation)
+  - [OPINION] <correction text> — [[<page>]] (per user correction <id>, user opinion)
+Default: corrections appear ONLY here, not inline in body. With --show-corrections OR --style detailed: also annotate the substituted matrix cell with `[per <tier> correction]`.
+If >50% of inputs share corrections of same tier, render an aggregation callout immediately under H1 (before Source caveats):
+> ⚠ This output incorporates substantial user corrections (N corrections across M inputs, mostly tier <X>). Treat substituted claims with appropriate confidence.>
 
 ## At a glance
 
@@ -282,6 +357,19 @@ If any input has `source_pool_warning != null`, add at top:
 
 If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
 
+## Author notes
+<Render only if any input page has corrections. Per /vault-correct two-part schema:
+- For OVERRIDE corrections: substitute the corrected event description / date.
+- For ADD corrections: include as additional dated event.
+- For RETIRE corrections: omit the retired event from the timeline (or render as `~~struck through~~ — retired per user correction <id>` if --show-corrections).
+- Each substituted/added correction gets a labeled visible reference here:
+  - [CITED] <correction text> — [[<page>]] (per user correction <id>, source: <url>)
+  - [PRACTITIONER] <correction text> — [[<page>]] (per user correction <id>, based on practitioner experience, not external citation)
+  - [OPINION] <correction text> — [[<page>]] (per user correction <id>, user opinion)
+Default: corrections appear ONLY here, not inline in body. With --show-corrections OR --style detailed: also annotate the substituted event with `[per <tier> correction]`.
+If >50% of inputs share corrections of same tier, render an aggregation callout immediately under H1 (before Source caveats):
+> ⚠ This output incorporates substantial user corrections (N corrections across M inputs, mostly tier <X>). Treat substituted claims with appropriate confidence.>
+
 ## <YYYY> or <era>
 - **<event>** — <description, [[page-slug]]>
 
@@ -315,6 +403,20 @@ If any input has `source_pool_warning != null`, add at top:
 > ⚠ Knowledge bounds: this output synthesizes from <topic-class> sources. Risk flags: [...]. Domain expertise / paid databases / insider knowledge are not represented unless flagged.
 
 If >50% of inputs share a `source_pool_warning`, escalate to a prominent "Source pool warning" callout at top of section.>
+
+## Author notes
+<Render only if any input page has corrections. Per /vault-correct two-part schema:
+- For OVERRIDE corrections: substitute the corrected term definition.
+- For ADD corrections: include as additional glossary entry.
+- For RETIRE corrections: omit the retired term from the glossary.
+- If multiple corrections define the same term differently, list both definitions and flag inline as a tension.
+- Each substituted/added correction gets a labeled visible reference here:
+  - [CITED] <correction text> — [[<page>]] (per user correction <id>, source: <url>)
+  - [PRACTITIONER] <correction text> — [[<page>]] (per user correction <id>, based on practitioner experience, not external citation)
+  - [OPINION] <correction text> — [[<page>]] (per user correction <id>, user opinion)
+Default: corrections appear ONLY here, not inline in body. With --show-corrections OR --style detailed: also annotate the substituted term entry with `[per <tier> correction]`.
+If >50% of inputs share corrections of same tier, render an aggregation callout immediately under H1 (before Source caveats):
+> ⚠ This output incorporates substantial user corrections (N corrections across M inputs, mostly tier <X>). Treat substituted claims with appropriate confidence.>
 
 ## A
 - **Term** — definition. From [[page-slug]].
@@ -389,3 +491,4 @@ Flags: <e.g., "timeline ran with only 2 dated claims" | "comparison overlap high
 - **Single scope flag per run.** `--topic` xor `--tag`; `--pages` excludes both.
 - **Cap input page reads at 20** (configurable later). Detailed mode + > 20 pages aborts.
 - **Empty section is acceptable, fabrication is not.** If glossary finds zero terms, write `## Notes — empty` and say so in the compact result.
+- **Respect per-input corrections via `## Author notes`.** Read each input page's `corrections:` array + per-correction file. OVERRIDE substitutes claim text, ADD adds context, RETIRE omits. Every substituted/added correction renders as a tier-labeled entry ([CITED] / [PRACTITIONER] / [OPINION]) in `## Author notes`. Default mode keeps corrections out of inline body to prevent stealth-laundering of OPINION-tier content; `--show-corrections` or `--style detailed` annotates inline. OPINION-tier never substitutes Findings/Synthesis claims unless `--allow-opinion-override`. CORRECT-POLICY corrections targeting policy files are skipped here — they belong in /vault-policy / /vault-lint surfaces.

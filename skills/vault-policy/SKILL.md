@@ -31,7 +31,7 @@ Active project subgraph at `~/.claude/vault/projects/<slug>/index.md`. If not, a
 ## Inputs
 
 - **Topic** (explicit, required for first run): `/vault-policy "JWT signing key rotation cadence"` — generate policy for this topic.
-- **Refresh**: `/vault-policy "<topic>" --refresh` — regenerate existing policy. Old policy preserved as `policy-<topic-slug>.v<N>.yaml` (mirror /vault-challenge v2 pattern). Manual only — no auto-regen.
+- **Refresh**: `/vault-policy "<topic>" --refresh` — regenerate existing policy. Old policy preserved as `policy-<topic-slug>.v<N>.yaml` (mirror /vault-challenge v2 pattern). `policy_overrides:` is preserved verbatim across the regeneration — base policy fields (Q1-Q7 outputs) get fresh values; user-supplied overrides survive untouched and apply on top at consumption time. Manual only — no auto-regen.
 - **Auto**: `/vault-policy "<topic>" --auto` — skip the confirmation prompt. Use when chained from another skill (autoresearch can call `/vault-policy --auto` if no policy exists for its topic).
 - **Review**: `/vault-policy --review <topic>` — show existing policy without regenerating. Read-only display.
 
@@ -182,6 +182,21 @@ If only one of Q3/Q4 fails (not both), proceed with `confidence_in_assessment: l
 
 Record `confidence_triggers` as a list (inspectable, not bool). Examples: "topic appears in <5% training", "highly recent post-cutoff topic", "well-defined RFC corpus exists", "I cannot name dissent locations concretely".
 
+### 4.5 Preserve existing policy_overrides (pre-write)
+
+Before writing the new policy file, check for an existing one at `raw/policy-<topic-slug>.md` (or the renamed `policy-<topic-slug>.v<N>.md` in `--refresh` mode):
+
+1. If a prior policy file exists, read its frontmatter and extract `policy_overrides:` array (if present).
+2. If `policy_overrides:` is non-empty, MERGE it into the new policy's frontmatter unchanged. Preserve every entry's id, timestamp, action, value, rationale, source, tier, correction_id verbatim.
+3. The override list survives the regeneration. New base policy fields (Q1-Q7 outputs) get fresh values; `policy_overrides:` is sacred.
+4. **Conflict surfacing**: if Q3 generated an `authoritative_domains` entry that an override says to remove (`{action: "remove", field: "authoritative_domains", value: "<X>"}`), surface in confirmation:
+   ```
+   Conflict: Q3 generated <domain>, but override <correction_id> says to remove it.
+   Keep override? (yes / no — discard override / abort)
+   ```
+   Same shape for `authoritative_domains` add-conflicts (override says add, base now includes natively → suggest retiring the override) and for `evidence_standard` / `recency_weight` / other field-level set-overrides that the new base contradicts.
+5. Default on conflict: keep the override. User can explicitly discard via the confirmation prompt.
+
 ### 5. Write the policy file
 
 Path: `~/.claude/vault/projects/<slug>/raw/policy-<topic-slug>.md`.
@@ -218,6 +233,18 @@ claude_bias_note: <1-3 sentences, specific>
 verbosity_default: <terse | full>
 policy_schema_version: 1
 created: <ISO-8601 date>
+policy_overrides:
+  # User-supplied corrections via /vault-correct CORRECT-POLICY.
+  # Preserved verbatim across --refresh regenerations. Empty list valid.
+  # Each entry is a structured override applied on top of base fields at consumption time.
+  - field: authoritative_domains       # which base policy field this override targets
+    action: add                         # add | remove | set
+    value: "latacora.micro.blog"        # value to add/remove/set (string or list per field type)
+    rationale: "domain expert reference, missed in Q3"  # one-line why
+    source: "user knowledge"            # provenance label
+    tier: PRACTITIONER                  # CITED | PRACTITIONER | OPINION (trust grade)
+    correction_id: c-2026-04-22-01      # links to /vault-correct entry
+    timestamp: 2026-04-22T15:30:00Z
 ---
 
 # Source policy: <topic>
@@ -258,7 +285,7 @@ created: <ISO-8601 date>
 - Confidence: <high|medium|low>. <one-line reason matching confidence_triggers>.
 ```
 
-**Schema field order is exact.** Downstream consumers parse positionally for some fields; reorder breaks them. The 13 frontmatter fields above match `vault-policy-prompt-design.md` v1 schema.
+**Schema field order is exact.** Downstream consumers parse positionally for some fields; reorder breaks them. The 13 base frontmatter fields above match `vault-policy-prompt-design.md` v1 schema. `policy_overrides:` is a 14th appended field — preserved verbatim across `--refresh`, optional (empty list valid).
 
 **verbosity_default rule** (set during generation, not at consume time):
 - `confidence_in_assessment: low` → `full`
@@ -295,6 +322,34 @@ Risk flags: <flags or "none">
 Refuse path triggered: <yes/no>
 ```
 
+## Policy override behavior
+
+`policy_overrides:` is the bridge between user-supplied corrections (via `/vault-correct CORRECT-POLICY`) and the auto-generated base policy. The base is regenerated by Q1-Q7 on every `--refresh`; overrides are user IP and survive verbatim.
+
+**Storage**: list of structured entries on the policy file's frontmatter. Each entry: `{field, action, value, rationale, source, tier, correction_id, timestamp}`. `field` names the base policy field targeted (e.g. `authoritative_domains`, `evidence_standard`, `recency_weight`, `dissent_classes_required`). `action` is one of `add | remove | set`.
+
+**Consumption-time application**: any skill reading the policy (autoresearch, lint D8, challenge, output) APPLIES `policy_overrides:` on top of the base fields before using the policy. Producers of the policy (this skill) write base fields; consumers compute the effective policy.
+
+Effective field semantics per `action`:
+- `action: add` on a list field → consumer treats `value` as if it were appended to that list. Example: `policy_overrides: [{field: "authoritative_domains", action: "add", value: "latacora.micro.blog"}]` → consumer treats `latacora.micro.blog` as if it were in `authoritative_domains` (allowlisted for WebSearch, scored as authoritative for D8, etc.).
+- `action: remove` on a list field → consumer EXCLUDES `value` from the effective field. Example: `policy_overrides: [{field: "blocklist_extra", action: "remove", value: "spam.com"}]` → consumer drops `spam.com` from the blocklist.
+- `action: set` on a scalar field → consumer treats `value` as the literal field value, superseding the base. Example: `policy_overrides: [{field: "evidence_standard", action: "set", value: "peer-reviewed"}]` → consumer treats `peer-reviewed` as the evidence standard regardless of what Q2 emitted.
+
+Effective field formula (consumer-side reference):
+```
+effective_<field> =
+  if any override has action: set on <field> → that override's value
+  else: base.<field>
+        + values from action: add overrides on <field>
+        - values from action: remove overrides on <field>
+```
+
+If multiple overrides on the same field disagree, latest `timestamp` wins (or explicit `supersedes:` chain when present). `tier` (CITED / PRACTITIONER / OPINION) does not gate application; it propagates downstream so consumers can render trust-grade labels.
+
+**Producer-side responsibility (this skill)**: preserve `policy_overrides:` verbatim on `--refresh`. Surface conflicts at confirmation time when the regenerated base contradicts an override (see section 4.5). Never silently mutate the override list.
+
+**Adding overrides**: canonical path is `/vault-correct CORRECT-POLICY`, which appends a new entry with a fresh `correction_id`. Direct hand-edits of `policy_overrides:` are permitted but must be logged in `log.md` with a `MANUAL-POLICY-EDIT` line for audit.
+
 ## Edge cases
 
 ### User overrides
@@ -302,6 +357,8 @@ Refuse path triggered: <yes/no>
 User can pass overrides: `/vault-policy "X" --topic-class technical-spec --recency-weight high`.
 
 Overrides applied AFTER the model's reasoning. Model still runs the 7-question chain; override patches the YAML at write time. Reasoning trace records both: "model output: hyped-domain; user override: technical-spec — see Q1 reasoning". Audit trail.
+
+CLI-flag overrides (`--topic-class`, `--recency-weight`, etc.) are distinct from `policy_overrides:` (the structured persisted field). Flags patch base fields at this run's write time; `policy_overrides:` survives across all future regenerations.
 
 ### Stale policies
 
@@ -340,8 +397,11 @@ Don't auto-decompose. Generate one policy. Flag in `claude_bias_note` if decompo
 - Honest-limits section is mandatory. Names what the policy does NOT cover.
 - Manual re-policy only. Never auto-regen mid-research. Stale policies surface in `/vault-lint`, user decides when to refresh.
 - Old policy versions preserved as `policy-<topic-slug>.v<N>.md` on `--refresh`. Never silently overwrite.
+- `policy_overrides:` is sacred — preserved verbatim across all regenerations. Never destroy user IP. New base policy fields regenerate from Q1-Q7; overrides survive untouched and apply on top at consumption time.
+- Override conflicts (Q3 generates a domain an override removes; base now natively contains an override-added value; etc.) surface at confirmation time, never silent resolution. Default: keep override.
+- `/vault-correct CORRECT-POLICY` is the canonical path to add overrides. Direct file edits to `policy_overrides:` are permitted but must be logged in `log.md` as `MANUAL-POLICY-EDIT`.
 - Policy is a PRIOR, not a hard filter. The schema biases ranking and shapes queries; it does not gate truth. Counter-evidence pass in `/vault-challenge` can break the policy when mainstream sources are wrong.
 - No WebSearch / WebFetch calls in this skill. Pure reasoning over Claude's priors. Cost: tokens only.
-- Schema field order is exact. Downstream consumers parse positionally. 13 frontmatter fields per spec v1.
+- Schema field order is exact. Downstream consumers parse positionally. 13 base frontmatter fields per spec v1, plus optional `policy_overrides:` (14th, appended).
 - Schema field is `policy_schema_version`, not `policy_version`. Bumps on schema breaking changes, not on `--refresh` regeneration.
 - Index update under `## Policies` heading is non-skippable. Orphaned policy files break downstream consumers that enumerate via index.

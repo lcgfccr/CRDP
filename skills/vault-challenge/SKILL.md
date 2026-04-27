@@ -92,6 +92,26 @@ Calibrate WEAKENED bar to `evidence_standard`:
 
 `dissent_likely_locations` → use as starting points / allowlist for adversarial searches in step 3, replacing generic `"<claim>" limitations`-style queries.
 
+### 2.6 Read corrections (if present)
+
+Read target page's frontmatter `corrections:` array. Absent or empty → skip this step.
+
+For each entry, fetch the full correction file at `~/.claude/vault/projects/<slug>/corrections/<page-slug>-<ts>-<id>.md`. Each entry has shape `{id, action, tier, timestamp}`.
+
+Action-typed handling:
+
+- **OVERRIDE** — substitute the corrected claim into the claim pool in place of the original. Do NOT auto-trust: test the corrected claim with the same rigor as any other (corrections can be wrong; user can mis-remember or mis-type). Annotate the resulting claim entry with the correction id for downstream audit.
+- **ADD** — treat as an additional claim to test. Subject to the 5-claim cap from step 1.
+- **RETIRE** — skip the retired claim from the testable pool entirely. Add an audit note to the `## Adversarial challenge` section: `Skipped per user retirement: <claim text> (correction <id>)`.
+- **CORRECT-POLICY** — out of scope here. Handled at the policy-read stage (step 2.5) where `policy_overrides:` get merged into effective policy fields.
+
+**`--trust-corrections` flag** (new): when passed, OVERRIDE-substituted claims skip adversarial testing entirely (user owns the risk, e.g., regulatory or expert-domain corrections). Default is to test.
+
+**Tier visibility**: each correction entry carries `tier: CITED | PRACTITIONER | OPINION`. When step 4 classifies the outcome of an OVERRIDE-substituted claim, include the tier in the audit annotation:
+- `[Per CITED user correction <id>]` for CITED-tier OVERRIDE
+- `[Per PRACTITIONER correction <id>]` for PRACTITIONER-tier OVERRIDE
+- OPINION-tier corrections require explicit `--trust-corrections` to substitute at all (default: ignored to avoid OPINION-tier authority injection without consent)
+
 ### 3. Fetch top counter-sources
 
 For each claim, `WebFetch` the top 2-3 results that look like genuine counter-evidence (not mere restatements of the original claim). Extract:
@@ -108,6 +128,11 @@ For each claim, assign one of three labels:
 - **UNFALSIFIED** — no empirical tests either way. No one has seriously tried to disprove it. Claim survives by absence of challenge but should carry lower confidence.
 
 Do NOT manufacture doubt where there is none. HELD UP is a valid, important outcome — many well-sourced claims genuinely hold up.
+
+**Tier annotation for correction-substituted claims**: if the claim came from an OVERRIDE correction (step 2.6), append the tier audit tag to its classification entry:
+- `[Per CITED user correction <id>]`
+- `[Per PRACTITIONER correction <id>]`
+- (OPINION-tier substituted only when `--trust-corrections` was passed; same annotation form with `OPINION` tier name.)
 
 ### 5. Append ## Adversarial challenge section
 
@@ -127,6 +152,12 @@ Challenged: <ISO-8601 date>
 ### Claims unfalsified
 - <claim> — no empirical tests found. Claim survives by absence of challenge; treat with lower confidence.
 ```
+
+**Correction-handling summary** (only if step 2.6 found any corrections): append a final line to the `## Adversarial challenge` section:
+```
+N corrections respected (X overridden, Y added, Z retired)
+```
+Where N = total processed, X = OVERRIDE count substituted into pool, Y = ADD count appended to pool, Z = RETIRE count skipped. Include any `Skipped per user retirement: <text> (correction <id>)` audit lines from step 2.6 above this summary line.
 
 If re-challenge mode = **v2**, append as `## Adversarial challenge (v2)` below the existing section. If mode = **overwrite**, replace the existing `## Adversarial challenge` section in place.
 
